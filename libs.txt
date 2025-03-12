@@ -1,0 +1,8 @@
+numpy
+scikit-learn
+matplotlib
+pandas
+seaborn
+scipy
+pytorch
+geopandas (if doesnt work: conda install -c conda-forge geopandas)
