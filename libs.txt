@@ -6,3 +6,5 @@ seaborn
 scipy
 pytorch
 geopandas (if doesnt work: conda install -c conda-forge geopandas)
+xarray
+netcdf4
