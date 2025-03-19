@@ -5,7 +5,7 @@ from tabulate import tabulate
 notebook_dir = Path().absolute()
 
 # NetCDF-Datei laden (Ersetze 'datei.nc' mit deinem Dateipfad)
-nc_data = xr.open_dataset(notebook_dir.parent / "data" / "CHRUN" / "chrun.nc")
+nc_data = xr.open_dataset(notebook_dir.parent.parent.parent / "data" / "CHRUN" / "chrun.nc")
 
 # Metadaten auslesen
 data = []
