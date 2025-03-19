@@ -9,7 +9,7 @@ Our goal is to provide researchers and decision-makers with a **dashboard** for 
 ### **1. Interactive Dashboard for Model Comparison**  
 The dashboard provides an intuitive interface for exploring hydrological model data with multiple visualization modes:  
 
-- **Heatmaps of HRU values** across different time steps (where applicable).  
+- **Heatmaps of HRU values** across different points in time (where applicable).  
 - **Heatmaps of changes in values** over time intervals, helping to identify trends.  
 - **Comparative heatmaps** showing differences between two hydrological models (**CH-RUN vs. PRAVAH**).  
 - **Customizable visualization settings**, including:  
@@ -24,13 +24,13 @@ Beyond visualization, we want to provide **data-driven insights** through AI and
 
 - **Regression-based analysis:**  
   - A simple regression network will be trained to **identify key data relationships**.  
-  - Open questions: **Which input variables to use? What is the best model architecture?**  
+  - Open questions: **Which input variables to use? What model architecture is fit for the task?**  
 
 - **Input sensitivity analysis:**  
   - Identifying how different input variables impact hydrological outputs on average.  
-  - Helps improve **model interpretability and robustness**.  
+  - Helps gauging **the relative importence of input parameters**.  
 
 - **Comparative Latent Space Analysis:**  
   - Projecting high-dimensional hydrological data into a **lower-dimensional space** while preserving key patterns.  
-  - Comparing **how data points move in this space over time**, offering insights into model behavior and anomalies.  
+  - Comparing **how data points move in this space over time relative to each other**, offering insights into real world dynamics through the lense of an abstract space.  
   - **Dashboard integration**: Users can visually track data movement in the latent space.
