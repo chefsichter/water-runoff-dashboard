@@ -2,10 +2,10 @@ import xarray as xr
 import pandas as pd
 from pathlib import Path
 from tabulate import tabulate
-notebook_dir = Path().absolute()
+script_dir = Path(__file__).resolve().parent
 
 # NetCDF-Datei laden (Ersetze 'datei.nc' mit deinem Dateipfad)
-nc_data = xr.open_dataset(notebook_dir.parent.parent.parent / "data" / "CHRUN" / "chrun.nc")
+nc_data = xr.open_dataset(script_dir.parent.parent.parent / "data" / "CHRUN" / "chrun.nc")
 
 # Metadaten auslesen
 data = []

@@ -123,9 +123,9 @@ if __name__ == '__main__':
     os.environ['GDAL_DATA'] = r'C:\Users\felix\.conda\envs\ai4good\Library\share\gdal'
 
     # Pfade zu den Daten (bitte anpassen)
-    notebook_dir = Path().absolute()
-    netcdf_path = notebook_dir.parent / "data" / "CHRUN" / "chrun.nc"
-    shapefile_path = notebook_dir.parent / "data" / "CHRUN" / "catchments" / 'catchments.shp'
+    script_dir = Path(__file__).resolve().parent
+    netcdf_path = script_dir.parent / "data" / "CHRUN" / "chrun.nc"
+    shapefile_path = script_dir.parent / "data" / "CHRUN" / "catchments" / 'catchments.shp'
 
     # Daten laden
     ds = load_netcdf_dataset(netcdf_path)
