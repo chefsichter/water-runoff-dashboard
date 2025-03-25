@@ -10,8 +10,5 @@ xarray
 netcdf4
 conda install -c conda-forge holoviews panel geoviews hvplot datashader
 tabulate
-panel
-holoviews
-hvplot
 plotly
 conda install -c conda-forge gdal
