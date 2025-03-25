@@ -120,7 +120,7 @@ if __name__ == '__main__':
 
     # print(f"CONDA_PREFIX: {os.environ['CONDA_PREFIX']}")
     # os.environ['GDAL_DATA'] = os.path.join(os.environ['CONDA_PREFIX'], 'Library', 'share', 'gdal')
-    os.environ['GDAL_DATA'] = r'C:\Users\felix\.conda\envs\ai4good\Library\share\gdal'
+    # os.environ['GDAL_DATA'] = r'C:\Users\felix\.conda\envs\ai4good\Library\share\gdal'
 
     # Pfade zu den Daten (bitte anpassen)
     script_dir = Path(__file__).resolve().parent

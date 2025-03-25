@@ -11,7 +11,7 @@ import pandas as pd
 pn.extension()
 hv.extension('bokeh')
 
-
+y
 # Funktion 1: Dataset laden
 def load_dataset(file_path: str) -> xr.Dataset:
     """Lädt ein NetCDF-Dataset und gibt es als xarray.Dataset zurück."""

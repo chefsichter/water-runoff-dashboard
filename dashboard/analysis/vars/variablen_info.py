@@ -26,4 +26,4 @@ for var_name, var in nc_data.variables.items():
 headers = ["Variablenname", "Langer Name", "Einheiten", "Dimensionen", "Datentyp", "Quelle", "Historie"]
 
 # Tabelle mit tabulate ausgeben
-print(tabulate(data, headers=headers, tablefmt="grid"))  # Alternativ: "pretty", "fancy_grid"
+print(tabulate(data, headers=headers, tablefmt="pretty"))  # Alternativ: "pretty", "fancy_grid"
