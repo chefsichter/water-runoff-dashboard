@@ -96,7 +96,7 @@ def build_dashboard(ds: xr.Dataset) -> pn.Column:
 if __name__ == '__main__':
     # Dataset laden (Pfad anpassen)
     notebook_dir = Path().absolute()
-    ds = xr.open_dataset(notebook_dir.parent / "data" / "CHRUN" / "chrun.nc")
+    ds = xr.open_dataset(notebook_dir.parent / "data" / "CHRUN" / "chrun.nc") # notebook_dir / "AI4Good" / "data" / "CHRUN" / "chrun.nc" 
     # Dashboard erstellen
     dashboard = build_dashboard(ds)
     # Dashboard anzeigen (z.B. als Bokeh-Server-App oder in Jupyter)
