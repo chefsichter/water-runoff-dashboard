@@ -25,8 +25,10 @@ def create_app():
 
     # Dashboard instanziieren
     dashboard = CHRUNDashboard(
+        script_dir=script_dir,
         ds=ds,
         gdf=gdf,
+        all_vars=all_vars,
         time_vars=time_vars,
         static_vars=static_vars,
         var_cmaps=var_cmaps,
@@ -40,4 +42,4 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    pn.serve(app, title="CHRUN Dashboard", show=True)
+    pn.serve(app, title="CHRUN Dashboard", show=True, port=1961)
