@@ -255,23 +255,34 @@ class CHRUNDashboard(param.Parameterized):
 
     def get_time_widget(self):
         if self.day_stride > 1:
-            time_widget = pn.widgets.DateRangeSlider(
-                name='Zeitbereich',
+            # Erstelle einen DateSlider, der den Start des Fensters auswählt.
+            time_slider = pn.widgets.DateSlider(
+                name='Startdatum',
                 start=pd.to_datetime(self.time_min),
                 end=pd.to_datetime(self.time_max),
-                value=(pd.to_datetime(self.date_range[0]), pd.to_datetime(self.date_range[1]))
+                value=pd.to_datetime(self.date)
             )
-            time_widget.link(self, value='date_range', bidirectional=True)
-            return time_widget
+
+            def update_date_range(event):
+                new_start = event.new  # event.new ist bereits ein datetime.date
+                new_end = (pd.to_datetime(new_start) + pd.Timedelta(days=self.day_stride - 1)).date()
+                self.date_range = (new_start, new_end)
+                # Aktualisiere den Label, um beide Daten anzuzeigen:
+                time_slider.name = f"Zeitraum: {new_start} bis {new_end}"
+
+            time_slider.param.watch(update_date_range, 'value')
+            time_slider.link(self, value='date', bidirectional=True)
+            return time_slider
         else:
-            time_widget = pn.widgets.DateSlider(
+            # Für einen einzelnen Tag verwenden wir den Namen "Datum"
+            time_slider = pn.widgets.DateSlider(
                 name='Datum',
                 start=pd.to_datetime(self.time_min),
                 end=pd.to_datetime(self.time_max),
                 value=pd.to_datetime(self.date)
             )
-            time_widget.link(self, value='date', bidirectional=True)
-            return time_widget
+            time_slider.link(self, value='date', bidirectional=True)
+            return time_slider
 
     def panel_view(self):
         # Steuerelemente in einer horizontalen Zeile
