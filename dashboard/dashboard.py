@@ -1,4 +1,7 @@
+import asyncio
 import os
+import time
+from contextlib import contextmanager
 
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
 os.environ["PROJ_LIB"] = "/home/chefsichter/miniconda3/envs/ai4good/share/proj"
@@ -6,9 +9,6 @@ os.environ["PROJ_LIB"] = "/home/chefsichter/miniconda3/envs/ai4good/share/proj"
 import param
 import panel as pn
 import pandas as pd
-import numpy as np
-import geopandas as gpd
-import xarray as xr
 
 import holoviews as hv
 import geoviews as gv
@@ -17,6 +17,7 @@ from bokeh.models import HoverTool
 import cartopy.crs as ccrs
 from shapely.geometry import Point
 
+from bokeh.io import curdoc
 hv.extension('bokeh')
 pn.extension()
 
@@ -26,45 +27,72 @@ class CHRUNDashboard(param.Parameterized):
     variable = param.ObjectSelector(default=None, objects=[])
     # Stride (Tage) über ein Inputfeld (IntInput) eingeben.
     day_stride = param.Integer(default=7, bounds=(1, 3650))
-    # Für einzelne Datumsauswahl (day_stride==1)
+    # Einzel-Datum für day_stride == 1
     date = param.CalendarDate(default=pd.Timestamp("2000-01-01").date())
-    # Für Zeitintervall, wenn day_stride > 1
+    # Zeitintervall (DateRange) für day_stride > 1
     date_range = param.Tuple(default=(pd.Timestamp("2000-01-01").date(),
-                                      pd.Timestamp("2000-01-01").date()))
+                                      pd.Timestamp("2000-01-07").date()))
     # Play/Pause-Action
     play = param.Action(lambda x: x.param.trigger('play'), label='Play')
     playing = False
-    # Spielgeschwindigkeit in Millisekunden (niedriger = schneller)
+    # Spielgeschwindigkeit in Millisekunden (Standard: 300 ms)
     play_speed = param.Number(default=300, bounds=(50, 2000))
+    # Global max für den Farbbereich (wird nach Berechnung gesetzt)
+    global_max = param.Number(default=0)
 
-    # Referenzen auf die Daten
+    # Daten
     ds = param.ClassSelector(class_=object, default=None)
     gdf = param.ClassSelector(class_=object, default=None)
+    all_vars = param.List(default=[])
     time_vars = param.List(default=[])
     static_vars = param.List(default=[])
     time_min = param.CalendarDate(default=pd.Timestamp("2000-01-01").date())
     time_max = param.CalendarDate(default=pd.Timestamp("2100-01-01").date())
 
-    # Tap-Stream zum Anklicken von Polygonen
+    # Tap-Stream für Klicks
     tap_stream = Tap(x=None, y=None, source=None)
     var_cmaps = param.Dict(default={})
 
     def __init__(self, **params):
+        self.script_dir = params.pop('script_dir', None)
         super().__init__(**params)
-        self.tap_stream = Tap(source=None, x=None, y=None)
-        self.param.watch(self.update_map, ['variable', 'day_stride', 'date', 'date_range'])
+        # Setze die Auswahlmöglichkeiten für die Variable
+        self.param.variable.objects = self.all_vars
+        # self.tap_stream.add_subscriber(self.fbra_on_tap)
+        # self.param.watch(self.update_map, ['variable', 'day_stride', 'date', 'date_range'])
         self.param.watch(self.toggle_play, ['play'])
         self.param.watch(self.update_date_range, ['day_stride'])
+        # Spinner als Ladeanzeige
+        self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50, css_classes=["spinner-centered"])
 
-    def update_map(self, *events):
-        """
-        Callback, wenn sich Variable, Stride oder Datum ändern.
-        Hier kannst du weitere Logik ergänzen, um z. B. automatisch die Karte neu zu rendern.
-        """
-        pass
+    # def fbra_on_tap(self, x, y):
+    #     print(f"Geklickt bei: ({x}, {y})")
+
+    def load_custom_css(self):
+        if self.script_dir:
+            css_path = self.script_dir / "css" / "custom.css"
+            if css_path.exists():
+                with open(css_path, "r") as f:
+                    custom_css = f.read()
+                pn.config.raw_css.append(custom_css)
+            else:
+                print(f"CSS-Datei nicht gefunden: {css_path}")
+        else:
+            print("Kein script_dir-Parameter übergeben. CSS konnte nicht geladen werden.")
+
+    @contextmanager
+    def show_spinner(self):
+        self.spinner.visible = True
+        try:
+            yield
+        finally:
+            self.spinner.visible = False
+
+    # def update_map(self, *events):
+    #     pass
 
     def update_date_range(self, event):
-        # Setze das Standard-Zeitintervall neu, wenn day_stride geändert wird.
+        # Aktualisiere das Standard-Zeitintervall, wenn day_stride geändert wird.
         start = self.time_min
         if self.day_stride > 1:
             end = pd.to_datetime(start) + pd.Timedelta(days=self.day_stride - 1)
@@ -72,16 +100,37 @@ class CHRUNDashboard(param.Parameterized):
         else:
             self.date_range = (pd.to_datetime(start).date(), pd.to_datetime(start).date())
 
+    def compute_global_max(self):
+        """
+        Berechnet über den gesamten Datensatz (für die aktuell ausgewählte Variable und day_stride)
+        den maximalen aggregierten Wert. Während der Berechnung wird ein Spinner angezeigt.
+        """
+        self.spinner.visible = True
+        var_name = self.variable
+        if var_name is None or var_name not in self.ds:
+            self.global_max = 0
+            self.spinner.visible = False
+            return
+        da = self.ds[var_name]
+        if 'time' in da.dims:
+            # Verwende xarray rolling, um das aggregierte Fenster zu berechnen:
+            aggregated = da.rolling(time=self.day_stride, min_periods=self.day_stride).sum()
+            self.global_max = float(aggregated.max())
+        else:
+            self.global_max = float(da.max())
+        self.spinner.visible = False
+
     def toggle_play(self, event):
         self.playing = not self.playing
         if self.playing:
+            self.play_button.name = "Pause"
             self._play_loop()
+        else:
+            self.play_button.name = "Play"
 
     def _play_loop(self):
         if not self.playing:
             return
-        # Bei day_stride > 1 wird das Zeitintervall verschoben,
-        # ansonsten wird das Datum um 1 Tag erhöht.
         if self.day_stride > 1:
             current_start = pd.to_datetime(self.date_range[0])
             next_start = current_start + pd.Timedelta(days=self.day_stride)
@@ -97,8 +146,8 @@ class CHRUNDashboard(param.Parameterized):
                 self.playing = False
                 return
             self.date = next_date.date()
-        # Verwende die aktuell eingestellte play_speed (ms)
-        pn.state.add_periodic_callback(self._play_loop, period=self.play_speed, count=1)
+        # Verwende die aktuell eingestellte play_speed (in ms)
+        curdoc().add_periodic_callback(self._play_loop, int(self.play_speed))
 
     def _get_cmap_for_var(self, var_name):
         if var_name in self.var_cmaps:
@@ -124,76 +173,85 @@ class CHRUNDashboard(param.Parameterized):
         return agg_da
 
     @pn.depends('variable', 'day_stride', 'date', 'date_range', watch=False)
-    def get_map(self):
+    async def get_map(self):
+        await asyncio.sleep(0.1)
         var_name = self.variable
         if var_name is None:
             return hv.Curve([]).opts(width=800, height=500)
-        # Wähle das Zeitargument: Wenn day_stride > 1, dann das Intervall, sonst das Einzel-Datum.
         time_value = self.date_range if self.day_stride > 1 else self.date
         agg_da = self._aggregate_data(var_name, time_value, self.day_stride)
         df_values = agg_da.to_series().to_frame(name=var_name)
-        if "hru" in self.gdf.index.names:
-            gdf2 = self.gdf.reset_index()
-        else:
-            gdf2 = self.gdf.copy()
-        merged = gdf2.join(df_values, on="hru", how="inner")
+        merged = self.gdf.join(df_values, on="hru", how="inner")
         merged = merged.dropna(subset=[var_name])
-        polys = gv.Polygons(
-            merged,
-            crs=ccrs.PlateCarree(),  # Die Daten liegen jetzt in EPSG:4326
-            vdims=[var_name, 'hru']
-        ).opts(
+        opts_dict = dict(
             projection=ccrs.Mercator(),
             tools=['hover', 'tap'],
             color=var_name,
-            cmap=self._get_cmap_for_var(var_name),
-            colorbar=True,
+            cmap=self._get_cmap_for_var(var_name), # Eingabe von Farbskala
+            colorbar=True, # zeigt Farbskala neben der Karte
             line_color='black',
             line_width=0.1,
             width=800,
             height=500,
             active_tools=['wheel_zoom']
         )
+        if self.global_max > 0:
+            opts_dict['clim'] = (0, self.global_max)
+        polys = gv.Polygons(
+            merged,  # Daten welche übergeben werden, muss geometry enthalten
+            crs=ccrs.PlateCarree(), # einfache Projektion, bei der lat/lon direkt als X/Y interpretiert werden,
+            # das entspricht EPSG:4326 (Breitengrad/Längengrad). Sehr wichtig: Das ist nicht die Darstellung,
+            # sondern das Koordinatensystem der Daten!
+            vdims=[var_name, 'hru'] # Welche Variablen für Farbe, Hover, Klicks genutzt werden
+        ).opts(**opts_dict)
         self.tap_stream.source = polys
         return polys
 
-    @pn.depends('variable', 'day_stride', 'date', 'date_range', 'tap_stream.x', 'tap_stream.y', watch=False)
+    @pn.depends('tap_stream.x', 'tap_stream.y', watch=False)
     def get_table(self):
-        var_name = self.variable
-        if var_name is None:
-            return pn.pane.Markdown("Keine Variable ausgewählt.")
-        time_value = self.date_range if self.day_stride > 1 else self.date
-        agg_da = self._aggregate_data(var_name, time_value, self.day_stride)
-        df_values = agg_da.to_series().to_frame(name=var_name)
-        if self.tap_stream.x is not None and self.tap_stream.y is not None:
-            click_point = Point(self.tap_stream.x, self.tap_stream.y)
-            selected = self.gdf[self.gdf.geometry.contains(click_point)]
-            if len(selected) > 0:
-                hru_clicked = selected.iloc[0]['hru']
-                row_data = {}
-                for v in self.static_vars:
-                    try:
-                        val = float(self.ds[v].sel(hru=hru_clicked).values)
-                        row_data[v] = val
-                    except Exception:
-                        row_data[v] = None
-                if var_name in self.time_vars:
-                    try:
-                        row_data[var_name] = float(df_values.loc[hru_clicked][var_name])
-                    except Exception:
-                        row_data[var_name] = None
+        with self.show_spinner():
+            var_name = self.variable
+            if var_name is None:
+                return pn.pane.Markdown("Keine Variable ausgewählt.")
+            time_value = self.date_range if self.day_stride > 1 else self.date
+            agg_da = self._aggregate_data(var_name, time_value, self.day_stride)
+            df_values = agg_da.to_series().to_frame(name=var_name)
+            if self.tap_stream.x is not None and self.tap_stream.y is not None:
+                click_point = Point(self.tap_stream.x, self.tap_stream.y)
+                selected = self.gdf[self.gdf.geometry.contains(click_point)]
+                if len(selected) > 0:
+                    hru_clicked = selected.iloc[0]['hru']
+                    row_data = {}
+                    for v in self.static_vars:
+                        try:
+                            val = float(self.ds[v].sel(hru=hru_clicked).values)
+                            row_data[v] = val
+                        except Exception:
+                            row_data[v] = None
+                    if var_name in self.time_vars:
+                        try:
+                            row_data[var_name] = float(df_values.loc[hru_clicked][var_name])
+                        except Exception:
+                            row_data[var_name] = None
+                    else:
+                        try:
+                            row_data[var_name] = float(self.ds[var_name].sel(hru=hru_clicked).values)
+                        except Exception:
+                            row_data[var_name] = None
+                    table_df = pd.DataFrame.from_dict(row_data, orient='index', columns=['Wert'])
+                    table_df.index.name = 'Variable'
+                    return pn.widgets.DataFrame(table_df, height=400, width=300, fit_columns=True)
                 else:
-                    try:
-                        row_data[var_name] = float(self.ds[var_name].sel(hru=hru_clicked).values)
-                    except Exception:
-                        row_data[var_name] = None
-                table_df = pd.DataFrame.from_dict(row_data, orient='index', columns=['Wert'])
-                table_df.index.name = 'Variable'
-                return pn.widgets.DataFrame(table_df, height=400, width=300, fit_columns=True)
+                    return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.")
             else:
-                return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.")
-        else:
-            return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.")
+                return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.")
+
+    def get_speed_widget(self):
+        speed_input = pn.widgets.IntInput(
+            name="Speed (ms)", value=int(self.play_speed), step=200, width=100
+        )
+        speed_input.link(self, value='play_speed', bidirectional=True)
+        return speed_input
 
     def get_time_widget(self):
         if self.day_stride > 1:
@@ -216,32 +274,36 @@ class CHRUNDashboard(param.Parameterized):
             return time_widget
 
     def panel_view(self):
-        # Erstelle die Steuerelemente in einer Zeile:
+        # Steuerelemente in einer horizontalen Zeile
         var_widget = pn.widgets.Select(
             name='Variable',
             options=self.param.variable.objects,
             value=self.variable
         )
-        # Stride als IntInput statt Slider
         stride_widget = pn.widgets.IntInput(
             name='Stride (Tage)',
             value=self.day_stride,
             width=100
         )
+        # Bei Verlassen (blur) des Stride-Eingabefelds: globalen Maxwert berechnen
+        # stride_widget.param.watch(lambda event: self.compute_global_max(), 'value')
         time_widget = self.get_time_widget()
-        play_button = pn.widgets.Button(name="Play/Pause", button_type="primary")
-        # Speed-Steuerung: Minus, Label, Plus
+
+        self.play_button = pn.widgets.Button(name="Play", button_type="primary",  width=60)
+        self.play_button.on_click(lambda event: self.toggle_play(None))
+
         speed_minus = pn.widgets.Button(name="-", button_type="warning", width=40)
         speed_plus = pn.widgets.Button(name="+", button_type="success", width=40)
         speed_label = pn.pane.Markdown(f"Speed: {self.play_speed} ms", width=100)
+        speed_input = self.get_speed_widget()
 
         def decrease_speed(event):
-            new_speed = max(self.play_speed - 50, 50)
+            new_speed = max(self.play_speed - 200, 50)
             self.play_speed = new_speed
             speed_label.object = f"Speed: {new_speed} ms"
 
         def increase_speed(event):
-            new_speed = min(self.play_speed + 50, 2000)
+            new_speed = min(self.play_speed + 200, 2000)
             self.play_speed = new_speed
             speed_label.object = f"Speed: {new_speed} ms"
 
@@ -251,21 +313,18 @@ class CHRUNDashboard(param.Parameterized):
         controls = pn.Row(
             var_widget,
             stride_widget,
+            self.spinner,
             time_widget,
-            play_button,
+            self.play_button,
             speed_minus,
             speed_label,
             speed_plus,
+            speed_input,
             sizing_mode="stretch_width"
         )
 
-        # Linkings
         var_widget.link(self, value='variable', bidirectional=False)
         stride_widget.link(self, value='day_stride', bidirectional=True)
-
-        # time_widget wird in get_time_widget verlinkt
-
-        play_button.on_click(lambda event: self.toggle_play(None))
 
         main_area = pn.Row(
             pn.Column(self.get_map),
@@ -278,3 +337,8 @@ class CHRUNDashboard(param.Parameterized):
         )
 
         return pn.Column(controls, main_area)
+
+
+if __name__ == '__main__':
+    dashboard = CHRUNDashboard()
+    dashboard.fbra_on_tap(100, 200)

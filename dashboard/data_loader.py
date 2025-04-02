@@ -14,12 +14,6 @@ def load_data(shp_path, nc_path):
     # NetCDF laden
     ds = xr.open_dataset(nc_path)
 
-    # Sicherstellen, dass 'hru' als Index in gdf existiert und
-    # zu ds.hru passt (ggf. anpassen, falls die Spalte anders heißt).
-    if gdf.index.name != "hru":
-        if "hru" in gdf.columns:
-            gdf = gdf.set_index("hru", drop=True)
-
     # Neu: Reprojektion von EPSG:21781 zu EPSG:4326
     if gdf.crs is not None and gdf.crs.to_string() == "EPSG:21781":
         gdf = gdf.to_crs(epsg=4326)
