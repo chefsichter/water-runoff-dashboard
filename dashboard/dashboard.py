@@ -27,9 +27,7 @@ class CHRUNDashboard(param.Parameterized):
     variable = param.ObjectSelector(default=None, objects=[])
     # Stride (Tage) über ein Inputfeld (IntInput) eingeben.
     day_stride = param.Integer(default=7, bounds=(1, 3650))
-    # Einzel-Datum für day_stride == 1
-    date = param.CalendarDate(default=pd.Timestamp("2000-01-01").date())
-    # Zeitintervall (DateRange) für day_stride > 1
+    # Wir verwenden nur noch einen Zeitbereich, nicht mehr ein einzelnes Datum:
     date_range = param.Tuple(default=(pd.Timestamp("2000-01-01").date(),
                                       pd.Timestamp("2000-01-07").date()))
     # Play/Pause-Action
@@ -58,15 +56,8 @@ class CHRUNDashboard(param.Parameterized):
         super().__init__(**params)
         # Setze die Auswahlmöglichkeiten für die Variable
         self.param.variable.objects = self.all_vars
-        # self.tap_stream.add_subscriber(self.fbra_on_tap)
-        # self.param.watch(self.update_map, ['variable', 'day_stride', 'date', 'date_range'])
-        self.param.watch(self.toggle_play, ['play'])
-        self.param.watch(self.update_date_range, ['day_stride'])
         # Spinner als Ladeanzeige
         self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50, css_classes=["spinner-centered"])
-
-    # def fbra_on_tap(self, x, y):
-    #     print(f"Geklickt bei: ({x}, {y})")
 
     def load_custom_css(self):
         if self.script_dir:
@@ -88,10 +79,8 @@ class CHRUNDashboard(param.Parameterized):
         finally:
             self.spinner.visible = False
 
-    # def update_map(self, *events):
-    #     pass
-
-    def update_date_range(self, event):
+    @pn.depends('day_stride', watch=True)
+    def update_date_range(self):
         # Aktualisiere das Standard-Zeitintervall, wenn day_stride geändert wird.
         start = self.time_min
         if self.day_stride > 1:
@@ -99,6 +88,9 @@ class CHRUNDashboard(param.Parameterized):
             self.date_range = (pd.to_datetime(start).date(), end.date())
         else:
             self.date_range = (pd.to_datetime(start).date(), pd.to_datetime(start).date())
+
+    def get_start_date(self):
+        return self.date_range[0]
 
     def compute_global_max(self):
         """
@@ -120,6 +112,7 @@ class CHRUNDashboard(param.Parameterized):
             self.global_max = float(da.max())
         self.spinner.visible = False
 
+    @pn.depends('play', watch=True)
     def toggle_play(self, event):
         self.playing = not self.playing
         if self.playing:
@@ -140,12 +133,12 @@ class CHRUNDashboard(param.Parameterized):
             new_range = (next_start.date(), (next_start + pd.Timedelta(days=self.day_stride - 1)).date())
             self.date_range = new_range
         else:
-            current_date = pd.to_datetime(self.date)
+            current_date = pd.to_datetime(self.get_start_date())
             next_date = current_date + pd.Timedelta(days=1)
             if next_date.date() > pd.to_datetime(self.time_max).date():
                 self.playing = False
                 return
-            self.date = next_date.date()
+            self.date_range = (next_date.date(), next_date.date())
         # Verwende die aktuell eingestellte play_speed (in ms)
         curdoc().add_periodic_callback(self._play_loop, int(self.play_speed))
 
@@ -172,13 +165,14 @@ class CHRUNDashboard(param.Parameterized):
             agg_da = da
         return agg_da
 
-    @pn.depends('variable', 'day_stride', 'date', 'date_range', watch=False)
+    @pn.depends('variable', 'day_stride', 'date_range', watch=False)
     async def get_map(self):
         await asyncio.sleep(0.1)
         var_name = self.variable
         if var_name is None:
             return hv.Curve([]).opts(width=800, height=500)
-        time_value = self.date_range if self.day_stride > 1 else self.date
+        # Immer den Zeitbereich nutzen:
+        time_value = self.date_range
         agg_da = self._aggregate_data(var_name, time_value, self.day_stride)
         df_values = agg_da.to_series().to_frame(name=var_name)
         merged = self.gdf.join(df_values, on="hru", how="inner")
@@ -213,7 +207,8 @@ class CHRUNDashboard(param.Parameterized):
             var_name = self.variable
             if var_name is None:
                 return pn.pane.Markdown("Keine Variable ausgewählt.")
-            time_value = self.date_range if self.day_stride > 1 else self.date
+            # Immer den Zeitbereich verwenden:
+            time_value = self.date_range
             agg_da = self._aggregate_data(var_name, time_value, self.day_stride)
             df_values = agg_da.to_series().to_frame(name=var_name)
             if self.tap_stream.x is not None and self.tap_stream.y is not None:
@@ -253,54 +248,55 @@ class CHRUNDashboard(param.Parameterized):
         speed_input.link(self, value='play_speed', bidirectional=True)
         return speed_input
 
-    def get_time_widget(self):
-        if self.day_stride > 1:
-            # Erstelle einen DateSlider, der den Start des Fensters auswählt.
-            time_slider = pn.widgets.DateSlider(
-                name='Startdatum',
-                start=pd.to_datetime(self.time_min),
-                end=pd.to_datetime(self.time_max),
-                value=pd.to_datetime(self.date)
-            )
-
-            def update_date_range(event):
-                new_start = event.new  # event.new ist bereits ein datetime.date
-                new_end = (pd.to_datetime(new_start) + pd.Timedelta(days=self.day_stride - 1)).date()
-                self.date_range = (new_start, new_end)
-                # Aktualisiere den Label, um beide Daten anzuzeigen:
-                time_slider.name = f"Zeitraum: {new_start} bis {new_end}"
-
-            time_slider.param.watch(update_date_range, 'value')
-            time_slider.link(self, value='date', bidirectional=True)
-            return time_slider
+    @staticmethod
+    def pretty_date_range(date_range):
+        start, end = date_range
+        if start == end:
+            return f"🕒 Datum: {start.strftime('%d.%m.%Y')}"
         else:
-            # Für einen einzelnen Tag verwenden wir den Namen "Datum"
-            time_slider = pn.widgets.DateSlider(
-                name='Datum',
-                start=pd.to_datetime(self.time_min),
-                end=pd.to_datetime(self.time_max),
-                value=pd.to_datetime(self.date)
-            )
-            time_slider.link(self, value='date', bidirectional=True)
-            return time_slider
+            return f"🕒 Zeitraum: {start.strftime('%d.%m.')} – {end.strftime('%d.%m.%Y')}"
+
+    @pn.depends('date_range', watch=True)
+    def update_time_slider_label(self):
+        self.time_slider.name = self.pretty_date_range(self.date_range)
+
+    def get_time_slider(self):
+        # Aktualisiere den Zeitbereich, wenn der Slider bewegt wird:
+        def on_slider_change_update_date_range(event):
+            new_start = event.new  # event.new ist bereits ein datetime.date
+            new_end = (pd.to_datetime(new_start) + pd.Timedelta(days=self.day_stride - 1)).date()
+            self.date_range = (new_start, new_end)
+
+        # Erstelle einen DateSlider, der den Start des Zeitbereichs auswählt.
+        time_slider = pn.widgets.DateSlider(
+            name=self.pretty_date_range(self.date_range),
+            start=pd.to_datetime(self.time_min),
+            end=pd.to_datetime(self.time_max),
+            value=pd.to_datetime(self.get_start_date()),
+            show_value=False
+        )
+
+        time_slider.param.watch(on_slider_change_update_date_range, 'value')
+        return time_slider
+
 
     def panel_view(self):
         # Steuerelemente in einer horizontalen Zeile
         var_widget = pn.widgets.Select(
-            name='Variable',
+            name='📊 Variable',
             options=self.param.variable.objects,
             value=self.variable
         )
         stride_widget = pn.widgets.IntInput(
-            name='Stride (Tage)',
+            name='↔️ Tage',
             value=self.day_stride,
             width=100
         )
         # Bei Verlassen (blur) des Stride-Eingabefelds: globalen Maxwert berechnen
         # stride_widget.param.watch(lambda event: self.compute_global_max(), 'value')
-        time_widget = self.get_time_widget()
+        self.time_slider = self.get_time_slider()
 
-        self.play_button = pn.widgets.Button(name="Play", button_type="primary",  width=60)
+        self.play_button = pn.widgets.Button(name="Play", button_type="primary", width=60)
         self.play_button.on_click(lambda event: self.toggle_play(None))
 
         speed_minus = pn.widgets.Button(name="-", button_type="warning", width=40)
@@ -325,7 +321,7 @@ class CHRUNDashboard(param.Parameterized):
             var_widget,
             stride_widget,
             self.spinner,
-            time_widget,
+            self.time_slider,
             self.play_button,
             speed_minus,
             speed_label,

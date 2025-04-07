@@ -34,8 +34,7 @@ def create_app():
         var_cmaps=var_cmaps,
         variable=all_vars[0] if all_vars else None,  # default
         time_min=pd.to_datetime(time_min).date(),
-        time_max=pd.to_datetime(time_max).date(),
-        date=pd.to_datetime(time_min).date()
+        time_max=pd.to_datetime(time_max).date()
     )
     # Panel-Layout erzeugen
     return dashboard.panel_view()
