@@ -52,12 +52,17 @@ class CHRUNDashboard(param.Parameterized):
     var_cmaps = param.Dict(default={})
 
     def __init__(self, **params):
+        # Erwarte zusätzlich ein Dictionary mit Metadaten:
+        self.var_metadata = params.pop('var_metadata', {})
         self.script_dir = params.pop('script_dir', None)
         super().__init__(**params)
-        # Setze die Auswahlmöglichkeiten für die Variable
+        # Setze die Auswahlmöglichkeiten: Hier sind alle_vars (z.B. ["P", "T", ...]) enthalten.
         self.param.variable.objects = self.all_vars
         # Spinner als Ladeanzeige
-        self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50, css_classes=["spinner-centered"])
+        self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50,
+                                                    css_classes=["spinner-centered"])
+        # Wir legen später den Time-Slider fest:
+        self.time_slider = None
 
     def load_custom_css(self):
         if self.script_dir:
@@ -279,21 +284,45 @@ class CHRUNDashboard(param.Parameterized):
         time_slider.param.watch(on_slider_change_update_date_range, 'value')
         return time_slider
 
+    def show_variable_info(self, event=None):
+        """Erzeugt einen Dialog mit allen Infos zur aktuell ausgewählten Variable."""
+        var_key = self.variable
+        if var_key not in self.var_metadata:
+            pn.state.notifications.error("Keine Metadaten für diese Variable vorhanden.")
+            return
+        meta = self.var_metadata[var_key]
+        info_text = f"""
+| Variablenname | Langer Name       | Einheiten | Dimensionen  | Datentyp | Quelle     | Historie                                      |
+|---------------|-------------------|-----------|--------------|----------|------------|-----------------------------------------------|
+| {meta.get("name", "N/A")} | {meta.get("long_name", "N/A")} | {meta.get("units", "N/A")} | {meta.get("dims", "N/A")} | {meta.get("dtype", "N/A")} | {meta.get("source", "N/A")} | {meta.get("history", "N/A")} |
+"""
+        # Erstelle einen Dialog (verwende pn.widgets.Dialog, sofern verfügbar)
+        dialog = pn.widgets.Dialog(title="Variable Info", closable=True, width=800)
+        dialog.objects = [pn.pane.Markdown(info_text)]
+        dialog.open = True
+        dialog.show()
 
     def panel_view(self):
-        # Steuerelemente in einer horizontalen Zeile
+        # Erstelle ein Options-Dictionary: Schlüssel = Variablenname, Wert = long_name (sofern vorhanden)
+        var_options = {
+            self.var_metadata.get(var, {}).get("long_name", var): var
+            for var in self.all_vars
+        }
         var_widget = pn.widgets.Select(
             name='📊 Variable',
-            options=self.param.variable.objects,
+            options=var_options,
             value=self.variable
         )
+        # Info-Button neben der Variablen-Auswahl
+        info_button = pn.widgets.Button(name="ℹ️", width=30)
+        info_button.on_click(self.show_variable_info)
+        var_selector = pn.Row(var_widget, info_button)
+
         stride_widget = pn.widgets.IntInput(
             name='↔️ Tage',
             value=self.day_stride,
             width=100
         )
-        # Bei Verlassen (blur) des Stride-Eingabefelds: globalen Maxwert berechnen
-        # stride_widget.param.watch(lambda event: self.compute_global_max(), 'value')
         self.time_slider = self.get_time_slider()
 
         self.play_button = pn.widgets.Button(name="Play", button_type="primary", width=60)
@@ -318,7 +347,7 @@ class CHRUNDashboard(param.Parameterized):
         speed_plus.on_click(increase_speed)
 
         controls = pn.Row(
-            var_widget,
+            var_selector,
             stride_widget,
             self.spinner,
             self.time_slider,

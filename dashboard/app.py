@@ -23,6 +23,19 @@ def create_app():
     all_vars, time_vars, static_vars = get_variable_lists(ds)
     var_cmaps = get_var_colormaps()
 
+    # Erzeuge ein Dictionary mit Variablenmetadaten
+    var_metadata = {}
+    for var_name, var in ds.variables.items():
+        var_metadata[var_name] = {
+            "name": var_name,
+            "long_name": var.attrs.get("long_name", "N/A"),
+            "units": var.attrs.get("units", "N/A"),
+            "dims": ", ".join(var.dims),
+            "dtype": str(var.dtype),
+            "source": var.attrs.get("source", "N/A"),
+            "history": var.attrs.get("history", "N/A")
+        }
+
     # Dashboard instanziieren
     dashboard = CHRUNDashboard(
         script_dir=script_dir,
@@ -31,6 +44,7 @@ def create_app():
         all_vars=all_vars,
         time_vars=time_vars,
         static_vars=static_vars,
+        var_metadata=var_metadata,
         var_cmaps=var_cmaps,
         variable=all_vars[0] if all_vars else None,  # default
         time_min=pd.to_datetime(time_min).date(),
