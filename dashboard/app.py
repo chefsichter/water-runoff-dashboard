@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import panel as pn
@@ -36,8 +35,10 @@ def create_app():
             "history": var.attrs.get("history", "N/A")
         }
 
+    bootstrap = pn.template.BootstrapTemplate(title="📊💧 Water Runoff Trends in Switzerland")
     # Dashboard instanziieren
     dashboard = CHRUNDashboard(
+        bootstrap=bootstrap,
         script_dir=script_dir,
         ds=ds,
         gdf=gdf,
@@ -51,8 +52,13 @@ def create_app():
         time_max=pd.to_datetime(time_max).date()
     )
     # Panel-Layout erzeugen
-    return dashboard.panel_view()
+    bootstrap.main.append(dashboard.panel_view())
+
+    # Optional: Du kannst auch Elemente im Sidebar oder Header hinzufügen, z. B. einen Info-Button
+    # bootstrap.sidebar.append(your_sidebar_widgets)
+
+    return bootstrap
 
 if __name__ == "__main__":
     app = create_app()
-    pn.serve(app, title="CHRUN Dashboard", show=True, port=1961)
+    pn.serve(app, title="Water Runoff Trends", show=True, port=1961)

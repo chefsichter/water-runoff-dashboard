@@ -53,6 +53,7 @@ class CHRUNDashboard(param.Parameterized):
 
     def __init__(self, **params):
         # Erwarte zusätzlich ein Dictionary mit Metadaten:
+        self.bootstrap: pn.template.BootstrapTemplate = params.pop('bootstrap')
         self.var_metadata = params.pop('var_metadata', {})
         self.script_dir = params.pop('script_dir', None)
         super().__init__(**params)
@@ -377,4 +378,3 @@ class CHRUNDashboard(param.Parameterized):
 
 if __name__ == '__main__':
     dashboard = CHRUNDashboard()
-    dashboard.fbra_on_tap(100, 200)
