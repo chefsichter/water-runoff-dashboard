@@ -54,7 +54,7 @@ class CHRUNDashboard(param.Parameterized):
         self.var_metadata = params.pop('var_metadata', {})
         self.script_dir = params.pop('script_dir', None)
         super().__init__(**params)
-        # Setze die Auswahlmöglichkeiten: Hier sind alle_vars (z.B. ["P", "T", ...]) enthalten.
+        # Setze die Auswahlmöglichkeiten: Hier sind all_vars (z.B. ["P", "T", ...]) enthalten.
         self.param.variable.objects = self.all_vars
         # Spinner als Ladeanzeige
         self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50,
@@ -318,7 +318,8 @@ class CHRUNDashboard(param.Parameterized):
         self.bootstrap.open_modal()
 
     def panel_view(self):
-        # Erstelle ein Options-Dictionary: Schlüssel = Variablenname, Wert = long_name (sofern vorhanden)
+        # --- Aufbau der Sidebar-Widgets ---
+        # Erstelle ein Options-Dictionary: Schlüssel = long_name (sofern vorhanden), Wert = Variablenname
         var_options = {
             self.var_metadata.get(var, {}).get("long_name", var): var
             for var in self.all_vars
@@ -326,20 +327,28 @@ class CHRUNDashboard(param.Parameterized):
         var_widget = pn.widgets.Select(
             name='📊 Variable',
             options=var_options,
-            value=self.variable
+            value=self.variable,
+            width = 270
         )
-        # Info-Button neben der Variablen-Auswahl
-        info_button = pn.widgets.Button(name="ℹ️", width=30)
+        # Info-Button neben der Variablenauswahl
+        info_button = pn.widgets.Button(name="ℹ️ Variableninfo")
         info_button.on_click(self.show_variable_info)
+        # Erstelle eine Zeile mit der Auswahl und dem Info-Button
         var_selector = pn.Row(var_widget, info_button)
-
+        # Widget für den Tage-Strid (day_stride)
         stride_widget = pn.widgets.IntInput(
             name='↔️ Tage',
             value=self.day_stride,
             width=100
         )
-        self.time_slider = self.get_time_slider()
+        # Verknüpfe die Werte der Widgets mit den Parametern
+        var_widget.link(self, value='variable', bidirectional=False)
+        stride_widget.link(self, value='day_stride', bidirectional=True)
+        # Füge die oben erstellten Widgets in die Sidebar des Bootstrap-Templates ein
+        self.bootstrap.sidebar.append(pn.Column(var_selector, stride_widget))
 
+        # --- Aufbau der Hauptsteuerung und der restlichen Inhalte ---
+        self.time_slider = self.get_time_slider()
         self.play_button = pn.widgets.Button(name="Play", button_type="primary", width=60)
         self.play_button.on_click(lambda event: self.toggle_play(None))
 
@@ -362,8 +371,6 @@ class CHRUNDashboard(param.Parameterized):
         speed_plus.on_click(increase_speed)
 
         controls = pn.Row(
-            var_selector,
-            stride_widget,
             self.spinner,
             self.time_slider,
             self.play_button,
@@ -373,9 +380,6 @@ class CHRUNDashboard(param.Parameterized):
             speed_input,
             sizing_mode="stretch_width"
         )
-
-        var_widget.link(self, value='variable', bidirectional=False)
-        stride_widget.link(self, value='day_stride', bidirectional=True)
 
         main_area = pn.Row(
             pn.Column(self.get_map),
