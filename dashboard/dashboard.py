@@ -328,13 +328,21 @@ class CHRUNDashboard(param.Parameterized):
             name='📊 Variable',
             options=var_options,
             value=self.variable,
-            width = 270
+            margin=(5, 0),
+            sizing_mode='stretch_width'
         )
         # Info-Button neben der Variablenauswahl
-        info_button = pn.widgets.Button(name="ℹ️ Variableninfo")
+        info_button = pn.widgets.Button(name="ℹ️",
+                                        width = 33, height=33, sizing_mode='fixed',
+                                        margin=(5, 0),
+                                        align='end')
         info_button.on_click(self.show_variable_info)
         # Erstelle eine Zeile mit der Auswahl und dem Info-Button
-        var_selector = pn.Row(var_widget, info_button)
+        var_selector = pn.Row(pn.Spacer(width=10),
+                              var_widget,
+                              pn.Spacer(width=10),
+                              info_button,
+                              pn.Spacer(width=10))
         # Widget für den Tage-Strid (day_stride)
         stride_widget = pn.widgets.IntInput(
             name='↔️ Tage',
