@@ -1,6 +1,9 @@
 from pathlib import Path
 
 import panel as pn
+import holoviews as hv
+hv.extension("bokeh")
+
 from dashboard import CHRUNDashboard
 from data_loader import (
     load_data,

@@ -1,6 +1,6 @@
 import asyncio
 import os
-import time
+import textwrap
 from contextlib import contextmanager
 
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
@@ -13,13 +13,10 @@ import pandas as pd
 import holoviews as hv
 import geoviews as gv
 from holoviews.streams import Tap
-from bokeh.models import HoverTool
 import cartopy.crs as ccrs
 from shapely.geometry import Point
 
 from bokeh.io import curdoc
-hv.extension('bokeh')
-pn.extension()
 
 
 class CHRUNDashboard(param.Parameterized):
@@ -64,6 +61,9 @@ class CHRUNDashboard(param.Parameterized):
                                                     css_classes=["spinner-centered"])
         # Wir legen später den Time-Slider fest:
         self.time_slider = None
+        # Erzeuge einen festen Container für den Modal-Inhalt und füge ihn in das Bootstrap-Template ein.
+        self.modal_container = pn.Column(sizing_mode="stretch_width")
+        self.bootstrap.modal.objects = [self.modal_container]
 
     def load_custom_css(self):
         if self.script_dir:
@@ -286,22 +286,36 @@ class CHRUNDashboard(param.Parameterized):
         return time_slider
 
     def show_variable_info(self, event=None):
-        """Erzeugt einen Dialog mit allen Infos zur aktuell ausgewählten Variable."""
+        """
+        Zeigt einen modernen Modal-Dialog mit stylischen Emojis und Infos zur aktuell
+        ausgewählten Variable an, wobei das im Bootstrap-Template integrierte Modal genutzt wird.
+        """
         var_key = self.variable
         if var_key not in self.var_metadata:
-            pn.state.notifications.error("Keine Metadaten für diese Variable vorhanden.")
+            pn.state.notifications.error("❌ Keine Metadaten für diese Variable vorhanden.")
             return
+
+        # Schließe zunächst das Modal, falls es bereits offen ist.
+        self.bootstrap.close_modal()
+
         meta = self.var_metadata[var_key]
-        info_text = f"""
-| Variablenname | Langer Name       | Einheiten | Dimensionen  | Datentyp | Quelle     | Historie                                      |
-|---------------|-------------------|-----------|--------------|----------|------------|-----------------------------------------------|
-| {meta.get("name", "N/A")} | {meta.get("long_name", "N/A")} | {meta.get("units", "N/A")} | {meta.get("dims", "N/A")} | {meta.get("dtype", "N/A")} | {meta.get("source", "N/A")} | {meta.get("history", "N/A")} |
-"""
-        # Erstelle einen Dialog (verwende pn.widgets.Dialog, sofern verfügbar)
-        dialog = pn.widgets.Dialog(title="Variable Info", closable=True, width=800)
-        dialog.objects = [pn.pane.Markdown(info_text)]
-        dialog.open = True
-        dialog.show()
+        # Erstelle einen dynamischen Header, der den gewünschten Titel anzeigt.
+        modal_content = textwrap.dedent(f"""
+            ### 🔍 Information: {var_key}
+            | **Zusatzinformationen** |                    |
+            | -------------------------- | ----------------------------- |
+            | 🏷️ Variablenname          | {meta.get("name", "N/A")}      |
+            | 🗺️ Bezeichnung           | {meta.get("long_name", "N/A")} |
+            | ⚖️ Einheiten             | {meta.get("units", "N/A")}     |
+            | 📐 Dimensionen           | {meta.get("dims", "N/A")}      |
+            | 💾 Datentyp              | {meta.get("dtype", "N/A")}     |
+            | 🗂️ Quelle              | {meta.get("source", "N/A")}    |
+            | 🕓 Historie             | {meta.get("history", "N/A")}   |
+        """)
+        # Aktualisiere den Inhalt des fest definierten Modal-Containers
+        self.modal_container.objects = [modal_content]
+        # Öffne das Modal
+        self.bootstrap.open_modal()
 
     def panel_view(self):
         # Erstelle ein Options-Dictionary: Schlüssel = Variablenname, Wert = long_name (sofern vorhanden)
