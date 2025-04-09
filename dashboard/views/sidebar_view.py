@@ -2,7 +2,7 @@
 import panel as pn
 
 
-def create_sidebar(all_vars, var_metadata, initial_variable, initial_day_stride, initial_date_range):
+def create_sidebar(all_vars, var_metadata, initial_variable, initial_day_stride, initial_date_range, full_date_range):
     # Erzeugen Sie ein Dictionary: Schlüssel = (falls vorhanden) long_name, Wert = Variablenname
     var_options = {
         var_metadata.get(var, {}).get("long_name", var): var
@@ -27,6 +27,18 @@ def create_sidebar(all_vars, var_metadata, initial_variable, initial_day_stride,
                           pn.Spacer(width=10),
                           info_button,
                           pn.Spacer(width=10))
+
+    # Neuer Jahrbereichs-Slider, der ausschließlich ganze Jahre anzeigt.
+    min_year = full_date_range[0].year
+    max_year = full_date_range[1].year
+    year_range_slider = pn.widgets.IntRangeSlider(
+        name="🧱 Jahresbereich",
+        start=min_year,
+        end=max_year,
+        value=(min_year, max_year),
+        step=1,
+        sizing_mode='stretch_width'
+    )
 
     # Widget für day_stride
     stride_widget = pn.widgets.IntInput(
@@ -58,7 +70,7 @@ def create_sidebar(all_vars, var_metadata, initial_variable, initial_day_stride,
                             pn.Spacer(width=10),
                             sizing_mode='stretch_width')
 
-    sidebar = pn.Column(var_selector, date_range_row, sizing_mode="stretch_width")
+    sidebar = pn.Column(var_selector, year_range_slider, date_range_row, sizing_mode="stretch_width")
 
     # Rückgabe eines Columns
-    return info_button, var_widget, stride_widget, start_date_picker, end_date_picker, sidebar
+    return info_button, var_widget, stride_widget, start_date_picker, end_date_picker, year_range_slider, sidebar
