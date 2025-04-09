@@ -3,6 +3,8 @@ import os
 import textwrap
 from contextlib import contextmanager
 
+from dashboard.config.settings import INIT_DAY_STRIDE, TIME_MIN, TIME_MAX
+
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
 os.environ["PROJ_LIB"] = "/home/chefsichter/miniconda3/envs/ai4good/share/proj"
 
@@ -19,14 +21,15 @@ from shapely.geometry import Point
 from bokeh.io import curdoc
 
 
-class CHRUNDashboard(param.Parameterized):
+class MainView(param.Parameterized):
     # Alle Variablen sollen in der Combobox auswählbar sein.
     variable = param.ObjectSelector(default=None, objects=[])
     # Stride (Tage) über ein Inputfeld (IntInput) eingeben.
-    day_stride = param.Integer(default=7, bounds=(1, 3650))
+    day_stride = param.Integer(default=INIT_DAY_STRIDE, bounds=(1, 3650))
     # Wir verwenden nur noch einen Zeitbereich, nicht mehr ein einzelnes Datum:
-    date_range = param.Tuple(default=(pd.Timestamp("2000-01-01").date(),
-                                      pd.Timestamp("2000-01-07").date()))
+    start_date = param.CalendarDate(default=pd.Timestamp("2000-01-01").date())
+    end_date = param.CalendarDate(default=pd.Timestamp("2000-01-07").date())
+
     # Play/Pause-Action
     play = param.Action(lambda x: x.param.trigger('play'), label='Play')
     playing = False
@@ -41,18 +44,14 @@ class CHRUNDashboard(param.Parameterized):
     all_vars = param.List(default=[])
     time_vars = param.List(default=[])
     static_vars = param.List(default=[])
-    time_min = param.CalendarDate(default=pd.Timestamp("2000-01-01").date())
-    time_max = param.CalendarDate(default=pd.Timestamp("2100-01-01").date())
+    time_min = param.CalendarDate(default=TIME_MIN)
+    time_max = param.CalendarDate(default=TIME_MAX)
 
     # Tap-Stream für Klicks
     tap_stream = Tap(x=None, y=None, source=None)
     var_cmaps = param.Dict(default={})
 
     def __init__(self, **params):
-        # Erwarte zusätzlich ein Dictionary mit Metadaten:
-        self.bootstrap: pn.template.BootstrapTemplate = params.pop('bootstrap')
-        self.var_metadata = params.pop('var_metadata', {})
-        self.script_dir = params.pop('script_dir', None)
         super().__init__(**params)
         # Setze die Auswahlmöglichkeiten: Hier sind all_vars (z.B. ["P", "T", ...]) enthalten.
         self.param.variable.objects = self.all_vars
@@ -60,22 +59,16 @@ class CHRUNDashboard(param.Parameterized):
         self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50,
                                                     css_classes=["spinner-centered"])
         # Wir legen später den Time-Slider fest:
-        self.time_slider = None
-        # Erzeuge einen festen Container für den Modal-Inhalt und füge ihn in das Bootstrap-Template ein.
-        self.modal_container = pn.Column(sizing_mode="stretch_width")
-        self.bootstrap.modal.objects = [self.modal_container]
+        self.date_range_slider = None
 
-    def load_custom_css(self):
-        if self.script_dir:
-            css_path = self.script_dir / "css" / "custom.css"
-            if css_path.exists():
-                with open(css_path, "r") as f:
-                    custom_css = f.read()
-                pn.config.raw_css.append(custom_css)
-            else:
-                print(f"CSS-Datei nicht gefunden: {css_path}")
-        else:
-            print("Kein script_dir-Parameter übergeben. CSS konnte nicht geladen werden.")
+    @property
+    def date_range(self):
+        return self.start_date, self.end_date
+
+    @date_range.setter
+    def date_range(self, value):
+        # Optional kannst du hier eine Validierung einbauen
+        self.start_date, self.end_date = value
 
     @contextmanager
     def show_spinner(self):
@@ -88,7 +81,7 @@ class CHRUNDashboard(param.Parameterized):
     @pn.depends('day_stride', watch=True)
     def update_date_range(self):
         # Aktualisiere das Standard-Zeitintervall, wenn day_stride geändert wird.
-        start = self.time_min
+        start = self.date_range[0]
         if self.day_stride > 1:
             end = pd.to_datetime(start) + pd.Timedelta(days=self.day_stride - 1)
             self.date_range = (pd.to_datetime(start).date(), end.date())
@@ -171,7 +164,7 @@ class CHRUNDashboard(param.Parameterized):
             agg_da = da
         return agg_da
 
-    @pn.depends('variable', 'day_stride', 'date_range', watch=False)
+    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', watch=False)
     async def get_map(self):
         await asyncio.sleep(0.1)
         var_name = self.variable
@@ -254,117 +247,55 @@ class CHRUNDashboard(param.Parameterized):
         speed_input.link(self, value='play_speed', bidirectional=True)
         return speed_input
 
-    @staticmethod
-    def pretty_date_range(date_range):
-        start, end = date_range
-        if start == end:
-            return f"🕒 Datum: {start.strftime('%d.%m.%Y')}"
-        else:
-            return f"🕒 Zeitraum: {start.strftime('%d.%m.')} – {end.strftime('%d.%m.%Y')}"
-
-    @pn.depends('date_range', watch=True)
-    def update_time_slider_label(self):
-        self.time_slider.name = self.pretty_date_range(self.date_range)
-
-    def get_time_slider(self):
-        # Aktualisiere den Zeitbereich, wenn der Slider bewegt wird:
-        def on_slider_change_update_date_range(event):
-            new_start = event.new  # event.new ist bereits ein datetime.date
-            new_end = (pd.to_datetime(new_start) + pd.Timedelta(days=self.day_stride - 1)).date()
-            self.date_range = (new_start, new_end)
-
-        # Erstelle einen DateSlider, der den Start des Zeitbereichs auswählt.
-        time_slider = pn.widgets.DateSlider(
-            name=self.pretty_date_range(self.date_range),
-            start=pd.to_datetime(self.time_min),
-            end=pd.to_datetime(self.time_max),
-            value=pd.to_datetime(self.get_start_date()),
-            show_value=False
+    def get_date_range_slider(self):
+        """
+        Erstellt einen DateRangeSlider, der den gesamten Zeitbereich auswählt.
+        Das Widget liefert ein Tupel (start, end), das in den Parameter date_range
+        (als Tuple von datetime.date) konvertiert und aktualisiert wird.
+        """
+        # Konvertiere initial den date_range-Wert in Timestamps, da der DateRangeSlider Timestamps verwendet.
+        date_range_slider = pn.widgets.DateRangeSlider(
+            name=f"🕒 Zeitraum",
+            start=pd.Timestamp(self.time_min),
+            end=pd.Timestamp(self.time_max),
+            value=(pd.Timestamp(self.date_range[0]), pd.Timestamp(self.date_range[1])),
+            show_value=True,
+            sizing_mode="stretch_width"
         )
 
-        time_slider.param.watch(on_slider_change_update_date_range, 'value')
-        return time_slider
+        # Callback, der beim Ändern des Sliders beide Parameter in MainView aktualisiert.
+        def update_dates(event):
+            new_start, new_end = event.new
+            # Konvertiere zu date, falls nötig
+            self.start_date = new_start.date() if hasattr(new_start, "date") else new_start
+            self.end_date = new_end.date() if hasattr(new_end, "date") else new_end
 
-    def show_variable_info(self, event=None):
-        """
-        Zeigt einen modernen Modal-Dialog mit stylischen Emojis und Infos zur aktuell
-        ausgewählten Variable an, wobei das im Bootstrap-Template integrierte Modal genutzt wird.
-        """
-        var_key = self.variable
-        if var_key not in self.var_metadata:
-            pn.state.notifications.error("❌ Keine Metadaten für diese Variable vorhanden.")
-            return
+        date_range_slider.param.watch(update_dates, 'value')
 
-        # Schließe zunächst das Modal, falls es bereits offen ist.
-        self.bootstrap.close_modal()
+        # Callback, um den Slider zu aktualisieren, wenn start_date oder end_date sich ändern.
+        def update_slider(*events):
+            # Verhindert rekursive Updates, falls nötig.
+            date_range_slider.value = (pd.Timestamp(self.start_date), pd.Timestamp(self.end_date))
 
-        meta = self.var_metadata[var_key]
-        # Erstelle einen dynamischen Header, der den gewünschten Titel anzeigt.
-        modal_content = textwrap.dedent(f"""
-            ### 🔍 Information: {var_key}
-            | **Zusatzinformationen** |                    |
-            | -------------------------- | ----------------------------- |
-            | 🏷️ Variablenname          | {meta.get("name", "N/A")}      |
-            | 🗺️ Bezeichnung           | {meta.get("long_name", "N/A")} |
-            | ⚖️ Einheiten             | {meta.get("units", "N/A")}     |
-            | 📐 Dimensionen           | {meta.get("dims", "N/A")}      |
-            | 💾 Datentyp              | {meta.get("dtype", "N/A")}     |
-            | 🗂️ Quelle              | {meta.get("source", "N/A")}    |
-            | 🕓 Historie             | {meta.get("history", "N/A")}   |
-        """)
-        # Aktualisiere den Inhalt des fest definierten Modal-Containers
-        self.modal_container.objects = [modal_content]
-        # Öffne das Modal
-        self.bootstrap.open_modal()
+        self.param.watch(lambda event: update_slider(), ['start_date', 'end_date'])
+
+        return date_range_slider
 
     def panel_view(self):
-        # --- Aufbau der Sidebar-Widgets ---
-        # Erstelle ein Options-Dictionary: Schlüssel = long_name (sofern vorhanden), Wert = Variablenname
-        var_options = {
-            self.var_metadata.get(var, {}).get("long_name", var): var
-            for var in self.all_vars
-        }
-        var_widget = pn.widgets.Select(
-            name='📊 Variable',
-            options=var_options,
-            value=self.variable,
-            margin=(5, 0),
-            sizing_mode='stretch_width'
-        )
-        # Info-Button neben der Variablenauswahl
-        info_button = pn.widgets.Button(name="ℹ️",
-                                        width = 33, height=33, sizing_mode='fixed',
-                                        margin=(5, 0),
-                                        align='end')
-        info_button.on_click(self.show_variable_info)
-        # Erstelle eine Zeile mit der Auswahl und dem Info-Button
-        var_selector = pn.Row(pn.Spacer(width=10),
-                              var_widget,
-                              pn.Spacer(width=10),
-                              info_button,
-                              pn.Spacer(width=10))
-        # Widget für den Tage-Strid (day_stride)
-        stride_widget = pn.widgets.IntInput(
-            name='↔️ Tage',
-            value=self.day_stride,
-            width=100
-        )
-        # Verknüpfe die Werte der Widgets mit den Parametern
-        var_widget.link(self, value='variable', bidirectional=False)
-        stride_widget.link(self, value='day_stride', bidirectional=True)
-        # Füge die oben erstellten Widgets in die Sidebar des Bootstrap-Templates ein
-        self.bootstrap.sidebar.append(pn.Column(var_selector, stride_widget))
+        # Erzeuge den Zeitschieberegler (DateSlider)
+        self.date_range_slider = self.get_date_range_slider()
 
-        # --- Aufbau der Hauptsteuerung und der restlichen Inhalte ---
-        self.time_slider = self.get_time_slider()
+        # Erzeuge den Play/Pause-Button
         self.play_button = pn.widgets.Button(name="Play", button_type="primary", width=60)
         self.play_button.on_click(lambda event: self.toggle_play(None))
 
+        # Erzeuge Steuerungselemente für die Spielgeschwindigkeit
         speed_minus = pn.widgets.Button(name="-", button_type="warning", width=40)
         speed_plus = pn.widgets.Button(name="+", button_type="success", width=40)
         speed_label = pn.pane.Markdown(f"Speed: {self.play_speed} ms", width=100)
         speed_input = self.get_speed_widget()
 
+        # Definition der Callbacks für Geschwindigkeitsanpassung
         def decrease_speed(event):
             new_speed = max(self.play_speed - 200, 50)
             self.play_speed = new_speed
@@ -378,9 +309,10 @@ class CHRUNDashboard(param.Parameterized):
         speed_minus.on_click(decrease_speed)
         speed_plus.on_click(increase_speed)
 
+        # Kombiniere die Steuerungselemente in eine horizontale Anordnung
         controls = pn.Row(
             self.spinner,
-            self.time_slider,
+            self.date_range_slider,
             self.play_button,
             speed_minus,
             speed_label,
@@ -389,6 +321,7 @@ class CHRUNDashboard(param.Parameterized):
             sizing_mode="stretch_width"
         )
 
+        # Aufbau des Hauptinhalts: Karte (Map) und Tabelle (Detailansicht)
         main_area = pn.Row(
             pn.Column(self.get_map),
             pn.Column(
@@ -399,8 +332,5 @@ class CHRUNDashboard(param.Parameterized):
             )
         )
 
+        # Rückgabe des kompletten Panels, das ausschließlich die dashboard‑relevanten Inhalte enthält.
         return pn.Column(controls, main_area)
-
-
-if __name__ == '__main__':
-    dashboard = CHRUNDashboard()

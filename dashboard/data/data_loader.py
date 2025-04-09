@@ -39,7 +39,20 @@ def get_variable_lists(ds):
     all_vars = list(ds.data_vars.keys())
     time_vars = [v for v in all_vars if 'time' in ds[v].dims]
     static_vars = [v for v in all_vars if 'time' not in ds[v].dims]
-    return all_vars, time_vars, static_vars
+    # Dictionary mit Variablen-Metadaten erzeugen
+    var_metadata = {}
+    for var_name, var in ds.variables.items():
+        var_metadata[var_name] = {
+            "name": var_name,
+            "long_name": var.attrs.get("long_name", "N/A"),
+            "units": var.attrs.get("units", "N/A"),
+            "dims": ", ".join(var.dims),
+            "dtype": str(var.dtype),
+            "source": var.attrs.get("source", "N/A"),
+            "history": var.attrs.get("history", "N/A")
+        }
+
+    return all_vars, time_vars, static_vars, var_metadata
 
 def get_var_colormaps():
     """
