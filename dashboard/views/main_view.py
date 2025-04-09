@@ -25,7 +25,7 @@ class MainView(param.Parameterized):
     # Alle Variablen sollen in der Combobox auswählbar sein.
     variable = param.ObjectSelector(default=None, objects=[])
     # Stride (Tage) über ein Inputfeld (IntInput) eingeben.
-    day_stride = param.Integer(default=INIT_DAY_STRIDE, bounds=(1, 3650))
+    day_stride = param.Integer(default=INIT_DAY_STRIDE, bounds=(1, 25000))
     # Wir verwenden nur noch einen Zeitbereich, nicht mehr ein einzelnes Datum:
     start_date = param.CalendarDate(default=pd.Timestamp("2000-01-01").date())
     end_date = param.CalendarDate(default=pd.Timestamp("2000-01-07").date())
@@ -78,15 +78,21 @@ class MainView(param.Parameterized):
         finally:
             self.spinner.visible = False
 
+    @pn.depends('start_date', 'end_date', watch=True)
+    def update_day_stride_from_date_range(self):
+        # Berechne die Tagesdifferenz: (+1, damit beide Endpunkte eingeschlossen sind)
+        computed_stride = (pd.to_datetime(self.end_date) - pd.to_datetime(self.start_date)).days + 1
+        # Updaten, falls sich der Wert wirklich ändert
+        if self.day_stride != computed_stride:
+            self.day_stride = computed_stride
+
     @pn.depends('day_stride', watch=True)
     def update_date_range(self):
-        # Aktualisiere das Standard-Zeitintervall, wenn day_stride geändert wird.
-        start = self.date_range[0]
-        if self.day_stride > 1:
-            end = pd.to_datetime(start) + pd.Timedelta(days=self.day_stride - 1)
-            self.date_range = (pd.to_datetime(start).date(), end.date())
-        else:
-            self.date_range = (pd.to_datetime(start).date(), pd.to_datetime(start).date())
+        # Nimm an, dass der Starttermin als master gilt und der Endtermin auf day_stride basiert.
+        start = self.start_date
+        computed_end = (pd.to_datetime(start) + pd.Timedelta(days=self.day_stride - 1)).date()
+        if self.end_date != computed_end:
+            self.end_date = computed_end
 
     def get_start_date(self):
         return self.date_range[0]
