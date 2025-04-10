@@ -1,4 +1,5 @@
 import geopandas as gpd
+import pandas as pd
 import xarray as xr
 from pathlib import Path
 
@@ -27,7 +28,7 @@ def get_time_bounds(ds):
     """
     time_min = ds.time.values[0]
     time_max = ds.time.values[-1]
-    return time_min, time_max
+    return pd.to_datetime(time_min), pd.to_datetime(time_max)
 
 def get_variable_lists(ds):
     """

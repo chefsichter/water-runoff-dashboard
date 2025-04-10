@@ -1,76 +1,52 @@
 # sidebar.py
 import panel as pn
 
+from dashboard.config.settings import INIT_VAR, INIT_DAY_STRIDE, INIT_DATE_RANGE
+from dashboard.widgets.date_picker import create_date_picker
+from dashboard.widgets.info_button import create_info_button
+from dashboard.widgets.stride_widget import create_stride_widget
+from dashboard.widgets.variable_selector import create_variable_selector
+from dashboard.widgets.year_range_slider import create_year_range_slider
 
-def create_sidebar(all_vars, var_metadata, initial_variable, initial_day_stride, initial_date_range, full_date_range):
-    # Erzeugen Sie ein Dictionary: Schlüssel = (falls vorhanden) long_name, Wert = Variablenname
-    var_options = {
-        var_metadata.get(var, {}).get("long_name", var): var
-        for var in all_vars
-    }
-    # Auswahl des Werts und Info-Button
-    var_widget = pn.widgets.Select(
-        name='📊 Variable',
-        options=var_options,
-        value=initial_variable,
-        margin=(5, 0),
+
+def create_sidebar_widgets(time_min, time_max, all_vars, var_metadata):
+    # Variablenselektion und Info-Button
+    var_widget = create_variable_selector(all_vars, var_metadata, INIT_VAR)
+    info_button = create_info_button()
+    # Jahresbereichs-Slider (Benötigt den vollständigen Zeitraum)
+    year_range_slider = create_year_range_slider(time_min.year, time_max.year)
+    # Widget für die Anzahl der Tage (Stride) und DatePicker
+    stride_widget = create_stride_widget(INIT_DAY_STRIDE)
+    start_date_picker = create_date_picker("📅 Startdatum", INIT_DATE_RANGE[0])
+    end_date_picker = create_date_picker("⌛ Enddatum", INIT_DATE_RANGE[1])
+    return end_date_picker, info_button, start_date_picker, stride_widget, var_widget, year_range_slider
+
+
+def create_sidebar(var_widget, info_button, year_range_slider, start_date_picker, end_date_picker, stride_widget):
+    # Kombiniere Variablenselektion und Info-Button in einer Zeile
+    var_selector = pn.Row(
+        pn.Spacer(width=10),
+        var_widget,
+        pn.Spacer(width=10),
+        info_button,
+        pn.Spacer(width=10)
+    )
+
+    # Zeile mit DatePicker und Stride
+    date_range_row = pn.Row(
+        pn.Spacer(width=10),
+        start_date_picker,
+        pn.Spacer(width=10),
+        end_date_picker,
+        pn.Spacer(width=10),
+        stride_widget,
+        pn.Spacer(width=10),
         sizing_mode='stretch_width'
     )
-    info_button = pn.widgets.Button(
-        name="ℹ️", width=33, height=33, sizing_mode='fixed',
-        align='end',
-        margin=(5, 0)
-    )
-    # Kombination in einer Zeile
-    var_selector = pn.Row(pn.Spacer(width=10),
-                          var_widget,
-                          pn.Spacer(width=10),
-                          info_button,
-                          pn.Spacer(width=10))
 
-    # Neuer Jahrbereichs-Slider, der ausschließlich ganze Jahre anzeigt.
-    min_year = full_date_range[0].year
-    max_year = full_date_range[1].year
-    year_range_slider = pn.widgets.IntRangeSlider(
-        name="🧱 Jahresbereich",
-        start=min_year,
-        end=max_year,
-        value=(min_year, max_year),
-        step=1,
-        sizing_mode='stretch_width'
-    )
-
-    # Widget für day_stride
-    stride_widget = pn.widgets.IntInput(
-        name='↔️ Tage',
-        value=initial_day_stride,
-        width=80,
-        margin = (5, 0)
-    )
-
-    # Zwei zusätzliche Widgets für den Date Range (Start- und Enddatum)
-    start_date_picker = pn.widgets.DatePicker(
-        name="📅 Startdatum",
-        value=initial_date_range[0],
-        sizing_mode='stretch_width',
-        margin = (5, 0)
-    )
-    end_date_picker = pn.widgets.DatePicker(
-        name="⌛ Enddatum",
-        value=initial_date_range[1],
-        sizing_mode='stretch_width',
-        margin=(5, 0)
-    )
-    date_range_row = pn.Row(pn.Spacer(width=10),
-                            start_date_picker,
-                            pn.Spacer(width=10),
-                            end_date_picker,
-                            pn.Spacer(width=10),
-                            stride_widget,
-                            pn.Spacer(width=10),
-                            sizing_mode='stretch_width')
-
+    # Gesamtes Sidebar‑Layout
     sidebar = pn.Column(var_selector, year_range_slider, date_range_row, sizing_mode="stretch_width")
+    return sidebar
 
-    # Rückgabe eines Columns
-    return info_button, var_widget, stride_widget, start_date_picker, end_date_picker, year_range_slider, sidebar
+
+

@@ -4,6 +4,8 @@ import textwrap
 from contextlib import contextmanager
 
 from dashboard.config.settings import INIT_DAY_STRIDE, TIME_MIN, TIME_MAX
+from dashboard.widgets.play_button import create_play_button
+from dashboard.widgets.speed_widget import create_speed_widget
 
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
 os.environ["PROJ_LIB"] = "/home/chefsichter/miniconda3/envs/ai4good/share/proj"
@@ -246,13 +248,6 @@ class MainView(param.Parameterized):
             else:
                 return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.")
 
-    def get_speed_widget(self):
-        speed_input = pn.widgets.IntInput(
-            name="Speed (ms)", value=int(self.play_speed), step=200, width=100
-        )
-        speed_input.link(self, value='play_speed', bidirectional=True)
-        return speed_input
-
     def get_date_range_slider(self):
         """
         Erstellt einen DateRangeSlider, der den gesamten Zeitbereich auswählt.
@@ -283,7 +278,7 @@ class MainView(param.Parameterized):
             # Verhindert rekursive Updates, falls nötig.
             date_range_slider.value = (pd.Timestamp(self.start_date), pd.Timestamp(self.end_date))
 
-        self.param.watch(lambda event: update_slider(), ['start_date', 'end_date'])
+        self.param.watch(lambda *args, **kwargs: update_slider(), ['start_date', 'end_date'])
 
         return date_range_slider
 
@@ -292,14 +287,15 @@ class MainView(param.Parameterized):
         self.date_range_slider = self.get_date_range_slider()
 
         # Erzeuge den Play/Pause-Button
-        self.play_button = pn.widgets.Button(name="Play", button_type="primary", width=60)
+        self.play_button = create_play_button()
         self.play_button.on_click(lambda event: self.toggle_play(None))
 
         # Erzeuge Steuerungselemente für die Spielgeschwindigkeit
         speed_minus = pn.widgets.Button(name="-", button_type="warning", width=40)
         speed_plus = pn.widgets.Button(name="+", button_type="success", width=40)
         speed_label = pn.pane.Markdown(f"Speed: {self.play_speed} ms", width=100)
-        speed_input = self.get_speed_widget()
+        speed_input = create_speed_widget(self.play_speed)
+        speed_input.link(self, value='play_speed', bidirectional=True)
 
         # Definition der Callbacks für Geschwindigkeitsanpassung
         def decrease_speed(event):
