@@ -237,10 +237,10 @@ class MainView(param.Parameterized):
     def sensitivity_analysis(self, df_input: pd.DataFrame) -> pd.DataFrame:
         assert(set(self.features).issubset(set(df_input.columns)))
 
-        df = pd.reorder_columns(df_input, self.features)
+        df = df_input[self.features]
         df["year"] = df["time"].dt.year
         df["day_of_year"] = df["time"].dt.dayofyear
-        df.drop("time", inplace=True)
+        df.drop("time", axis=1, inplace=True)
 
         df["Y"] = 0.0
         df  = pd.DataFrame(self.scaler.inverse_transform(df), columns=df.columns)
