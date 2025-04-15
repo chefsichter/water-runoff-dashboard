@@ -34,14 +34,15 @@ def create_app():
 
     # Modal-Styles überschreiben – GANZ am Anfang
     pn.config.raw_css.append("""
-    .modal-dialog {
-        max-width: 600px !important;
-        width: 90%;
-    }
-    .modal-content {
-        padding: 20px 25px;
-    }
-    """)
+.modal-dialog {
+    max-width: 520px !important;  /* enger als vorher (600px) */
+    width: 90%;  /* mobile-friendly */
+    margin: 1.75rem auto;  /* optional: etwas Abstand nach oben/unten */
+}
+.modal-content {
+    padding: 0px;  /* Padding hier auf 0, weil du es im .var-info-modal selbst machst */
+}
+""")
     # Bootstrap-Template erzeugen
     bootstrap = pn.template.BootstrapTemplate(title="📊💧 Water Runoff Trends in Switzerland")
 
