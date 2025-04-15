@@ -23,6 +23,11 @@ from shapely.geometry import Point
 
 from bokeh.io import curdoc
 
+#P#
+import numpy as np
+import joblib
+import torch
+import shap
 
 class MainView(param.Parameterized):
     # Alle Variablen sollen in der Combobox auswählbar sein.
@@ -53,6 +58,25 @@ class MainView(param.Parameterized):
     # Tap-Stream für Klicks
     tap_stream = Tap(x=None, y=None, source=None)
     var_cmaps = param.Dict(default={})
+
+    #P#
+    scaler = joblib.load("data/model/scaler.pkl")
+    model = torch.jit.load("data/model/model.pt")
+    sample = torch.load("data/model/sample_tensor.pt")
+
+    #P#
+    model.eval()
+    explainer  = shap.GradientExplainer(model, sample)
+
+    #P#
+    features = ['P', 'T', 'abb', 'area', 'atb', 'btk', 'dhm', 'glm', 'kwt', 'pfc',
+                'frac_water', 'frac_urban_areas', 'frac_coniferous_forests',
+                'frac_deciduous_forests', 'frac_mixed_forests', 'frac_cereals',
+                'frac_pasture', 'frac_bush', 'frac_unknown', 'frac_firn',
+                'frac_bare_ice', 'frac_rock', 'frac_vegetables',
+                'frac_alpine_vegetation', 'frac_wetlands', 'frac_sub_Alpine_meadow',
+                'frac_alpine_meadow', 'frac_bare_soil_vegetation', 'frac_grapes', 'slp', 
+                'time'] # time -> year, day_of_year
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -208,6 +232,32 @@ class MainView(param.Parameterized):
         ).opts(**opts_dict)
         self.tap_stream.source = polys
         return polys
+    
+    #P#
+    def sensitivity_analysis(self, df_input: pd.DataFrame) -> pd.DataFrame:
+        assert(set(self.features).issubset(set(df_input.columns)))
+
+        df = pd.reorder_columns(df_input, self.features)
+        df["year"] = df["time"].dt.year
+        df["day_of_year"] = df["time"].dt.dayofyear
+        df.drop("time", inplace=True)
+
+        df["Y"] = 0.0
+        df  = pd.DataFrame(self.scaler.inverse_transform(df), columns=df.columns)
+        df.drop("Y", axis=1, inplace=True)
+        ts = torch.tensor(df.to_numpy()) 
+
+        shap_values = self.explainer.shap_values(ts, nsamples=1000, rseed=42)
+        shap_values = shap_values.squeeze(axis=2)
+
+        df_shape = pd.DataFrame(shap_values, columns=df.columns)
+        df_avg = df_shape.mean().abs()
+        df_abs = df_avg.abs()
+        df_norm = df_abs / df_abs.sum() * 100
+        signed_norm = [np.sign(df_avg) * df_norm]
+        df_output = pd.DataFrame(signed_norm, columns=df.columns)
+
+        return df_output
 
     @pn.depends('tap_stream.x', 'tap_stream.y', watch=False)
     def get_table(self):
