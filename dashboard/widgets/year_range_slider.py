@@ -1,14 +1,18 @@
 import pandas as pd
 import panel as pn
 
-def create_year_range_slider(min_year, max_year):
+from dashboard.config.settings import YEAR_START_DATE, YEAR_END_DATE
+
+
+def create_year_range_slider(min_year, max_year, start_year, end_year):
     return pn.widgets.IntRangeSlider(
         name="🧱 Jahresbereich",
         start=min_year,
         end=max_year,
-        value=(min_year, max_year),
+        value=(start_year, end_year),
         step=1,
-        sizing_mode='stretch_width'
+        sizing_mode='stretch_width',
+        margin=(10,10,0,10)
     )
 
 def set_map_bounds(event, main_view, adjust_start_for_stride=True):

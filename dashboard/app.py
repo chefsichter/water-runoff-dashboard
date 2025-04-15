@@ -3,6 +3,7 @@ import panel as pn
 import holoviews as hv
 import pandas as pd
 
+from dashboard.config.settings import END_DATE, START_DATE, YEAR_START_DATE, YEAR_END_DATE, INIT_DAY_STRIDE
 from dashboard.css.custom_css import load_custom_css
 from dashboard.views.main_view import MainView
 from dashboard.views.modal_view import show_var_infos
@@ -42,28 +43,34 @@ def create_app():
         static_vars=static_vars,
         var_cmaps=var_cmaps,
         variable=all_vars[0] if all_vars else None,
-        time_min=time_min.date(),
-        time_max=time_max.date()
+        start_date=START_DATE,
+        end_date=END_DATE,
+        time_min=YEAR_START_DATE,
+        time_max=YEAR_END_DATE,
+        day_stride=INIT_DAY_STRIDE,
     )
-    
+
     # Widgets für Sidebar erstellen
     (end_date_picker,
      info_button,
      start_date_picker,
      stride_widget,
-     var_widget, 
-     year_range_slider) = create_sidebar_widgets(time_min, time_max, all_vars, var_metadata)
+     var_selector,
+     year_range_slider) = create_sidebar_widgets(time_min, time_max,
+                                                 YEAR_START_DATE, YEAR_END_DATE,
+                                                 START_DATE, END_DATE,
+                                                 all_vars, var_metadata)
 
     # Verknüpfungen der Widgets
-    var_widget.link(main_view, value='variable', bidirectional=True)
-    info_button.on_click(lambda event: show_var_infos(bootstrap, var_metadata, var_widget.value))
+    var_selector.link(main_view, value='variable', bidirectional=True)
+    info_button.on_click(lambda event: show_var_infos(bootstrap, var_metadata, var_selector.value))
     year_range_slider.param.watch(lambda event: set_map_bounds(event, main_view), 'value')
     start_date_picker.link(main_view, value='start_date', bidirectional=True)
     end_date_picker.link(main_view, value='end_date', bidirectional=True)
     stride_widget.link(main_view, value='day_stride', bidirectional=True)
 
     # Sidebar-Layout erstellen, indem die bereits erstellten Widgets übergeben werden
-    sidebar = create_sidebar(var_widget, info_button, year_range_slider, start_date_picker, end_date_picker,
+    sidebar = create_sidebar(var_selector, info_button, year_range_slider, start_date_picker, end_date_picker,
                              stride_widget)
 
     # Füge die einzelnen Teile zusammen

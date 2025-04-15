@@ -3,7 +3,8 @@ import os
 import textwrap
 from contextlib import contextmanager
 
-from dashboard.config.settings import INIT_DAY_STRIDE, TIME_MIN, TIME_MAX
+from dashboard.config.settings import START_DATE, END_DATE, YEAR_START_DATE, \
+    YEAR_END_DATE
 from dashboard.widgets.play_button import create_play_button
 from dashboard.widgets.speed_widget import create_speed_widget
 
@@ -27,10 +28,10 @@ class MainView(param.Parameterized):
     # Alle Variablen sollen in der Combobox auswählbar sein.
     variable = param.ObjectSelector(default=None, objects=[])
     # Stride (Tage) über ein Inputfeld (IntInput) eingeben.
-    day_stride = param.Integer(default=INIT_DAY_STRIDE, bounds=(1, 25000))
+    day_stride = param.Integer(default=None, bounds=(1, 25000))
     # Wir verwenden nur noch einen Zeitbereich, nicht mehr ein einzelnes Datum:
-    start_date = param.CalendarDate(default=pd.Timestamp("2000-01-01").date())
-    end_date = param.CalendarDate(default=pd.Timestamp("2000-01-07").date())
+    start_date = param.CalendarDate(default=None)
+    end_date = param.CalendarDate(default=None)
 
     # Play/Pause-Action
     play = param.Action(lambda x: x.param.trigger('play'), label='Play')
@@ -46,8 +47,8 @@ class MainView(param.Parameterized):
     all_vars = param.List(default=[])
     time_vars = param.List(default=[])
     static_vars = param.List(default=[])
-    time_min = param.CalendarDate(default=TIME_MIN)
-    time_max = param.CalendarDate(default=TIME_MAX)
+    time_min = param.CalendarDate(default=None)
+    time_max = param.CalendarDate(default=None)
 
     # Tap-Stream für Klicks
     tap_stream = Tap(x=None, y=None, source=None)
@@ -259,7 +260,7 @@ class MainView(param.Parameterized):
             name=f"🕒 Zeitraum",
             start=pd.Timestamp(self.time_min),
             end=pd.Timestamp(self.time_max),
-            value=(pd.Timestamp(self.date_range[0]), pd.Timestamp(self.date_range[1])),
+            value=(pd.Timestamp(self.start_date), pd.Timestamp(self.end_date)),
             show_value=True,
             sizing_mode="stretch_width"
         )
