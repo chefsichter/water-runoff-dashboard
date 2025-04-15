@@ -31,6 +31,17 @@ def create_app():
     all_vars, time_vars, static_vars, var_metadata = get_variable_lists(ds)
     var_cmaps = get_var_colormaps()
 
+
+    # Modal-Styles überschreiben – GANZ am Anfang
+    pn.config.raw_css.append("""
+    .modal-dialog {
+        max-width: 600px !important;
+        width: 90%;
+    }
+    .modal-content {
+        padding: 20px 25px;
+    }
+    """)
     # Bootstrap-Template erzeugen
     bootstrap = pn.template.BootstrapTemplate(title="📊💧 Water Runoff Trends in Switzerland")
 
