@@ -3,3 +3,4 @@
 .pytest_cache/
 /fbra_test/
 /dashboard/fbra_test/
+**/__pycache__/
