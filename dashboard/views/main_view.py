@@ -243,7 +243,7 @@ class MainView(param.Parameterized):
         df.drop("time", axis=1, inplace=True)
 
         df["Y"] = 0.0
-        df  = pd.DataFrame(self.scaler.inverse_transform(df), columns=df.columns)
+        df  = pd.DataFrame(self.scaler.transform(df), columns=df.columns)
         df.drop("Y", axis=1, inplace=True)
         ts = torch.tensor(df.to_numpy()) 
 
