@@ -13,7 +13,7 @@ from dashboard.widgets.year_range_slider import set_map_bounds
 # Widget-Funktionen importieren:
 
 hv.extension("bokeh")
-from data.data_loader import load_data, get_time_bounds, get_variable_lists, get_var_colormaps
+from dashboard.data.data_loader import load_data, get_time_bounds, get_variable_lists, get_var_colormaps
 
 
 def create_app():
