@@ -67,16 +67,33 @@ class MainView(param.Parameterized):
     #P#
     model.eval()
     explainer  = shap.GradientExplainer(model, sample)
+    
+    #P#
+    scaler_static_rnn = joblib.load("data/model/scaler_static_rnn.pkl")
+    scaler_dynamic_rnn = joblib.load("data/model/scaler_dynamic_rnn.pkl")
+    model_rnn = torch.jit.load("data/model/model_rnn.pt")
+    sampled_static, sampled_dynamic = torch.load("data/model/sample_tensor_rnn.pt")
 
     #P#
-    features = ['P', 'T', 'abb', 'area', 'atb', 'btk', 'dhm', 'glm', 'kwt', 'pfc',
-                'frac_water', 'frac_urban_areas', 'frac_coniferous_forests',
-                'frac_deciduous_forests', 'frac_mixed_forests', 'frac_cereals',
-                'frac_pasture', 'frac_bush', 'frac_unknown', 'frac_firn',
-                'frac_bare_ice', 'frac_rock', 'frac_vegetables',
-                'frac_alpine_vegetation', 'frac_wetlands', 'frac_sub_Alpine_meadow',
-                'frac_alpine_meadow', 'frac_bare_soil_vegetation', 'frac_grapes', 'slp', 
-                'time'] # time -> year, day_of_year
+    class WrappedModel(torch.nn.Module):
+        def __init__(self, model, n_static):
+            super().__init__()
+            self.model = model
+            self.n_static = n_static
+    
+        def forward(self, inputs):
+            static_input = inputs[:, :self.n_static]
+            dynamic_input = inputs[:, self.n_static:].reshape((inputs.shape[0], 7, 4))
+            return self.model(static_input, dynamic_input)
+
+    #P#
+    n_samples = sampled_static.shape[0]
+    n_static = sampled_static.shape[1]
+    model_rnn.eval()
+    wrapped_model = WrappedModel(model_rnn, n_static)
+    dynamic_unraveled = sampled_dynamic.reshape((n_samples, n_static)) # since 7*4 coincides with that
+    background = torch.cat([sampled_static, dynamic_unraveled], dim=1)
+    explainer_rnn = shap.GradientExplainer(wrapped_model, background)
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -235,9 +252,19 @@ class MainView(param.Parameterized):
     
     #P#
     def sensitivity_analysis(self, df_input: pd.DataFrame) -> pd.DataFrame:
-        assert(set(self.features).issubset(set(df_input.columns)))
 
-        df = df_input[self.features]
+        features = ['P', 'T', 'abb', 'area', 'atb', 'btk', 'dhm', 'glm', 'kwt', 'pfc',
+                'frac_water', 'frac_urban_areas', 'frac_coniferous_forests',
+                'frac_deciduous_forests', 'frac_mixed_forests', 'frac_cereals',
+                'frac_pasture', 'frac_bush', 'frac_unknown', 'frac_firn',
+                'frac_bare_ice', 'frac_rock', 'frac_vegetables',
+                'frac_alpine_vegetation', 'frac_wetlands', 'frac_sub_Alpine_meadow',
+                'frac_alpine_meadow', 'frac_bare_soil_vegetation', 'frac_grapes', 'slp', 
+                'time'] # time -> year, day_of_year
+        
+        assert(set(features).issubset(set(df_input.columns)))
+
+        df = df_input[features]
         df["year"] = df["time"].dt.year
         df["day_of_year"] = df["time"].dt.dayofyear
         df.drop("time", axis=1, inplace=True)
@@ -248,6 +275,79 @@ class MainView(param.Parameterized):
         ts = torch.tensor(df.to_numpy()) 
 
         shap_values = self.explainer.shap_values(ts, nsamples=1000, rseed=42)
+        shap_values = shap_values.squeeze(axis=2)
+
+        df_shape = pd.DataFrame(shap_values, columns=df.columns)
+        df_avg = df_shape.mean().abs()
+        df_abs = df_avg.abs()
+        df_norm = df_abs / df_abs.sum() * 100
+        signed_norm = [np.sign(df_avg) * df_norm]
+        df_output = pd.DataFrame(signed_norm, columns=df.columns)
+
+        return df_output
+    
+    def sensitivity_analysis_rnn(self, df_input: pd.DataFrame) -> pd.DataFrame:
+
+        features_static = [ 'abb', 'area', 'atb', 'btk', 'dhm', 'glm', 'kwt', 'pfc',
+                            'frac_water', 'frac_urban_areas', 'frac_coniferous_forests',
+                            'frac_deciduous_forests', 'frac_mixed_forests', 'frac_cereals',
+                            'frac_pasture', 'frac_bush', 'frac_unknown', 'frac_firn',
+                            'frac_bare_ice', 'frac_rock', 'frac_vegetables',
+                            'frac_alpine_vegetation', 'frac_wetlands', 'frac_sub_Alpine_meadow',
+                            'frac_alpine_meadow', 'frac_bare_soil_vegetation', 'frac_grapes', 'slp'
+                          ]
+        
+        features_dynamic = ['P_6', 'T_6', 'time_6', 'P_5', 'T_5', 'time_5', 'P_4', 'T_4', 'time_4',
+                            'P_3', 'T_3', 'time_3', 'P_2', 'T_2', 'time_2', 'P_1', 'T_1', 'time_1',
+                            'P_0', 'T_0', 'time_0'
+                           ] # time -> year, day_of_year, predict Y_0
+        
+        assert(set(features_static + features_dynamic).issubset(set(df_input.columns)))
+
+        df = df_input[features_static + features_dynamic]
+
+        df["year_6"] = df["time_6"].dt.year
+        df["day_of_year_6"] = df["time_6"].dt.dayofyear
+        df["year_5"] = df["time_5"].dt.year
+        df["day_of_year_5"] = df["time_5"].dt.dayofyear
+        df["year_4"] = df["time_4"].dt.year
+        df["day_of_year_4"] = df["time_4"].dt.dayofyear
+        df["year_3"] = df["time_3"].dt.year
+        df["day_of_year_3"] = df["time_3"].dt.dayofyear
+        df["year_2"] = df["time_2"].dt.year
+        df["day_of_year_2"] = df["time_2"].dt.dayofyear
+        df["year_1"] = df["time_1"].dt.year
+        df["day_of_year_1"] = df["time_1"].dt.dayofyear
+        df["year_0"] = df["time_0"].dt.year
+        df["day_of_year_0"] = df["time_0"].dt.dayofyear
+
+        columns_to_drop = ["time_6", "time_5", "time_4", "time_3", "time_2", "time_1", "time_0"]
+        df.drop(columns=columns_to_drop, inplace=True)
+        df["Y"] = 0.0
+
+        d6 = ['P_6', 'T_6', 'year_6', 'day_of_year_6', 'Y']
+        d5 = ['P_5', 'T_5', 'year_5', 'day_of_year_5', 'Y']
+        d4 = ['P_4', 'T_4', 'year_4', 'day_of_year_4', 'Y']
+        d3 = ['P_3', 'T_3', 'year_3', 'day_of_year_3', 'Y']
+        d2 = ['P_2', 'T_2', 'year_2', 'day_of_year_2', 'Y']
+        d1 = ['P_1', 'T_1', 'year_1', 'day_of_year_1', 'Y']
+        d0 = ['P_0', 'T_0', 'year_0', 'day_of_year_0', 'Y']
+
+        df[d6]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d6]))
+        df[d5]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d5]))
+        df[d4]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d4]))
+        df[d3]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d3]))
+        df[d2]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d2]))
+        df[d1]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d1]))
+        df[d0]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d0]))
+
+        df[features_static]  = pd.DataFrame(self.scaler_static_rnn.transform(df[features_static]))
+
+        df.drop("Y", axis=1, inplace=True)
+
+        ts = torch.tensor(df.to_numpy()) 
+
+        shap_values = self.explainer_rnn.shap_values(ts, nsamples=1000, rseed=42)
         shap_values = shap_values.squeeze(axis=2)
 
         df_shape = pd.DataFrame(shap_values, columns=df.columns)
