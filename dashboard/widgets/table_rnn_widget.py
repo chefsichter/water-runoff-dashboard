@@ -64,14 +64,14 @@ def create_rnn_sensitivity_widget(main_view, hru_clicked):
         # Tabulator mit fixer Prozent-Spalte und flexibler Feature-Spalte
         df = rnn_sens_table.reset_index()
         # Rename columns
-        if len(df.columns) >= 2:
-            df.columns = ['Feature', '%']
+        df.columns = ['Feature', '%']
         return pn.widgets.Tabulator(
             df,
             show_index=False,
             layout='fit_data',
             widths={'%': 50},
-            height=300
+            height=300,
+            disabled=True
         )
     except Exception as e:
         return pn.pane.Markdown(f"Fehler in RNN Sensitivitätsanalyse: {e}", width=300)

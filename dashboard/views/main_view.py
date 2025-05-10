@@ -9,6 +9,7 @@ from dashboard.widgets.play_button import create_play_button
 from dashboard.widgets.speed_widget import create_speed_widget
 from dashboard.widgets.table_snn_widget import create_static_sensitivity_widget
 from dashboard.widgets.table_rnn_widget import create_rnn_sensitivity_widget
+from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
 
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
 os.environ["PROJ_LIB"] = "/home/chefsichter/miniconda3/envs/ai4good/share/proj"
@@ -228,62 +229,45 @@ class MainView(param.Parameterized):
     @pn.depends('tap_stream.x', 'tap_stream.y', watch=False)
     def get_table(self):
         with self.show_spinner():
-            var_name = self.variable
-            if var_name is None:
-                return pn.pane.Markdown("Keine Variable ausgewählt.")
-            # Immer den Zeitbereich verwenden:
-            time_value = self.date_range
-            agg_da = self._aggregate_data(var_name, time_value, self.day_stride)
-            df_values = agg_da.to_series().to_frame(name=var_name)
             if self.tap_stream.x is not None and self.tap_stream.y is not None:
+                # Prüfe Klick-Koordinaten
                 click_point = Point(self.tap_stream.x, self.tap_stream.y)
                 selected = self.gdf[self.gdf.geometry.contains(click_point)]
                 if len(selected) > 0:
                     hru_clicked = selected.iloc[0]['hru']
-                    row_data = {}
-                    for v in self.static_vars:
-                        try:
-                            val = float(self.ds[v].sel(hru=hru_clicked).values)
-                            row_data[v] = val
-                        except Exception:
-                            row_data[v] = None
-                    if var_name in self.time_vars:
-                        try:
-                            row_data[var_name] = float(df_values.loc[hru_clicked][var_name])
-                        except Exception:
-                            row_data[var_name] = None
-                    else:
-                        try:
-                            row_data[var_name] = float(self.ds[var_name].sel(hru=hru_clicked).values)
-                        except Exception:
-                            row_data[var_name] = None
-                    # Grundlegende Werte-Tabelle
-                    table_df = pd.DataFrame.from_dict(row_data, orient='index', columns=['Wert'])
-                    table_df.index.name = 'Variable'
-                    table_widget = pn.widgets.DataFrame(table_df, height=300, width=300, fit_columns=True)
+                    # Aggregations-Widget (Tabelle mit Basiswerten)
+                    table_widget, table_hru = create_aggregation_widget(self, hru_clicked)
+                    # Bei Markdown-Fallback direkt zurückgeben
+                    if table_hru is None:
+                        return table_widget
                     # Statische und RNN Sensitivitätsanalyse nebeneinander anzeigen
                     static_sens_widget = create_static_sensitivity_widget(self, hru_clicked)
                     rnn_sens_widget = create_rnn_sensitivity_widget(self, hru_clicked)
-                    # Layout: Header + Basiswerte, dann Stat./RNN side-by-side
-                    return pn.Column(
-                        pn.pane.Markdown(f"### HRU {hru_clicked} - Detailansicht"),
-                        table_widget,
-                        pn.Row(
-                            pn.Column(
-                                pn.pane.Markdown("### Statische Modell-Sensitivität"),
-                                static_sens_widget
-                            ),
-                            pn.Column(
-                                pn.pane.Markdown("### RNN Modell-Sensitivität"),
-                                rnn_sens_widget
-                            ),
-                            sizing_mode="stretch_width"
-                        )
+                    # Layout: Sensitivitäten in Zeile
+                    top_row = pn.Row(
+                        pn.Column(
+                            pn.pane.Markdown("### Statische Modell-Sensitivität"),
+                            static_sens_widget
+                        ),
+                        pn.Column(
+                            pn.pane.Markdown("### RNN Modell-Sensitivität"),
+                            rnn_sens_widget
+                        ),
+                        sizing_mode="stretch_width"
                     )
+                    # Aggregationstabelle mit Titel und voller Breite
+                    agg_panel = pn.Column(
+                        pn.pane.Markdown("### Basiswerte"),
+                        table_widget,
+                        sizing_mode="stretch_width"
+                    )
+                    return pn.Column(top_row, agg_panel, sizing_mode="stretch_width")
                 else:
-                    return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.")
+                    # Kein Polygon unter Klickpunkt: nur Markdown ausgeben
+                    return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.", width=300)
             else:
-                return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.")
+                # Vor dem Klick: Hinweistext anzeigen
+                return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.", width=300)
 
     def get_date_range_slider(self):
         """

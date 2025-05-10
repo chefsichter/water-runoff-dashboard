@@ -6,7 +6,7 @@ INIT_VAR = "P"
 
 # Date Range Widget
 START_DATE = datetime.date(2020, 1, 1)
-END_DATE = datetime.date(2020, 12, 31)
+END_DATE = datetime.date(2020, 1, 1)
 INIT_DAY_STRIDE = (END_DATE - START_DATE).days + 1
 
 # Year Range Widget

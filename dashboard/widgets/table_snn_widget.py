@@ -37,7 +37,8 @@ def create_static_sensitivity_widget(main_view, hru_clicked):
             show_index=False,
             layout='fit_data',
             widths={'%': 50},
-            height=300
+            height=300,
+            disabled=True
         )
     except Exception as e:
         return pn.pane.Markdown(f"Fehler in statischer Sensitivitätsanalyse: {e}", width=300)
