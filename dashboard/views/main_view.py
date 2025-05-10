@@ -7,6 +7,8 @@ from dashboard.config.settings import START_DATE, END_DATE, YEAR_START_DATE, \
     YEAR_END_DATE
 from dashboard.widgets.play_button import create_play_button
 from dashboard.widgets.speed_widget import create_speed_widget
+from dashboard.widgets.table_snn_widget import create_static_sensitivity_widget
+from dashboard.widgets.table_rnn_widget import create_rnn_sensitivity_widget
 
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
 os.environ["PROJ_LIB"] = "/home/chefsichter/miniconda3/envs/ai4good/share/proj"
@@ -72,9 +74,9 @@ class MainView(param.Parameterized):
         # Spinner als Ladeanzeige
         self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50,
                                                     css_classes=["spinner-centered"])
-        # Wir legen später den Time-Slider fest:
+        # Platzhalter für den DateRangeSlider
         self.date_range_slider = None
-        # Sensitivity models
+        # Sensitivity-Modelle
         self.snn = StaticSensitivity()
         self.rnn = RNNSensitivity()
 
@@ -259,61 +261,24 @@ class MainView(param.Parameterized):
                     table_df = pd.DataFrame.from_dict(row_data, orient='index', columns=['Wert'])
                     table_df.index.name = 'Variable'
                     table_widget = pn.widgets.DataFrame(table_df, height=300, width=300, fit_columns=True)
-                    # Statische Sensitivitätsanalyse (GradientExplainer) nur für Einzel-Tages-Auswahl
-                    if self.day_stride == 1:
-                        try:
-                            static_input = {}
-                            # Statische Merkmale
-                            for v in self.static_vars:
-                                static_input[v] = float(self.ds[v].sel(hru=hru_clicked).values)
-                            # Dynamische Merkmale: P und T am Einzel-Tag (kein Rolling nötig)
-                            date = pd.to_datetime(self.start_date)
-                            static_input['P'] = float(self.ds['P'].sel(hru=hru_clicked, time=date).values)
-                            static_input['T'] = float(self.ds['T'].sel(hru=hru_clicked, time=date).values)
-                            # Zeit-Feature für Analyse (Startdatum)
-                            static_input['time'] = pd.to_datetime(self.start_date)
-                            df_static_input = pd.DataFrame([static_input])
-                            df_static_sens = self.snn.analyze(df_static_input)
-                            # Formatieren der Sensitivitätstabelle
-                            static_sens_table = df_static_sens.T
-                            static_sens_table.columns = ['Beitrag [%]']
-                            static_sens_table.index.name = 'Feature'
-                            static_sens_widget = pn.widgets.DataFrame(static_sens_table, fit_columns=True)
-                        except Exception as e:
-                            static_sens_widget = pn.pane.Markdown(f"Fehler in statischer Sensitivitätsanalyse: {e}")
-                    else:
-                        static_sens_widget = pn.pane.Markdown("Statische Sensitivitätsanalyse nur für Einzel-Tages-Auswahl (day_stride=1) verfügbar.")
-                    # RNN-Sensitivitätsanalyse (GradientExplainer)
-                    try:
-                        rnn_input = {}
-                        # Statische Merkmale
-                        for v in self.static_vars:
-                            rnn_input[v] = float(self.ds[v].sel(hru=hru_clicked).values)
-                        # Referenzdatum (Ende des ausgewählten Zeitraums)
-                        date_end = pd.to_datetime(self.end_date)
-                        # Dynamisches Fenster der letzten 7 Tage
-                        for i in range(6, -1, -1):
-                            date_i = date_end - pd.Timedelta(days=i)
-                            rnn_input[f'P_{i}'] = float(self.ds['P'].sel(hru=hru_clicked, time=date_i).values)
-                            rnn_input[f'T_{i}'] = float(self.ds['T'].sel(hru=hru_clicked, time=date_i).values)
-                            rnn_input[f'time_{i}'] = date_i
-                        df_rnn_input = pd.DataFrame([rnn_input])
-                        df_rnn_sens = self.rnn.analyze(df_rnn_input)
-                        # Formatieren der Sensitivitätstabelle
-                        rnn_sens_table = df_rnn_sens.T
-                        rnn_sens_table.columns = ['Beitrag [%]']
-                        rnn_sens_table.index.name = 'Feature'
-                        rnn_sens_widget = pn.widgets.DataFrame(rnn_sens_table, fit_columns=True)
-                    except Exception as e:
-                        rnn_sens_widget = pn.pane.Markdown(f"Fehler in RNN Sensitivitätsanalyse: {e}")
-                    # Zusammenführen aller Ansichten
+                    # Statische und RNN Sensitivitätsanalyse nebeneinander anzeigen
+                    static_sens_widget = create_static_sensitivity_widget(self, hru_clicked)
+                    rnn_sens_widget = create_rnn_sensitivity_widget(self, hru_clicked)
+                    # Layout: Header + Basiswerte, dann Stat./RNN side-by-side
                     return pn.Column(
                         pn.pane.Markdown(f"### HRU {hru_clicked} - Detailansicht"),
                         table_widget,
-                        pn.pane.Markdown("### Statische Modell-Sensitivität"),
-                        static_sens_widget,
-                        pn.pane.Markdown("### RNN Modell-Sensitivität"),
-                        rnn_sens_widget
+                        pn.Row(
+                            pn.Column(
+                                pn.pane.Markdown("### Statische Modell-Sensitivität"),
+                                static_sens_widget
+                            ),
+                            pn.Column(
+                                pn.pane.Markdown("### RNN Modell-Sensitivität"),
+                                rnn_sens_widget
+                            ),
+                            sizing_mode="stretch_width"
+                        )
                     )
                 else:
                     return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.")

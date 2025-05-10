@@ -1,7 +1,6 @@
 from pathlib import Path
 import panel as pn
 import holoviews as hv
-import pandas as pd
 
 from dashboard.config.settings import END_DATE, START_DATE, YEAR_START_DATE, YEAR_END_DATE, INIT_DAY_STRIDE
 from dashboard.css.custom_css import load_custom_css
@@ -11,7 +10,7 @@ from dashboard.views.sidebar_view import create_sidebar, create_sidebar_widgets
 from dashboard.widgets.year_range_slider import set_map_bounds
 
 # Widget-Funktionen importieren:
-
+pn.extension('tabulator')
 hv.extension("bokeh")
 from dashboard.data.data_loader import load_data, get_time_bounds, get_variable_lists, get_var_colormaps
 
