@@ -47,7 +47,9 @@ def create_app():
     bootstrap = pn.template.BootstrapTemplate(title="📊💧 Water Runoff Trends in Switzerland")
 
     # MainView erzeugen
+    # MainView erzeugen (inkl. Variable Metadata)
     main_view = MainView(
+        var_metadata=var_metadata,
         ds=ds,
         gdf=gdf,
         all_vars=all_vars,

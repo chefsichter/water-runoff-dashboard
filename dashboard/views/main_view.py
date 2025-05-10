@@ -22,12 +22,7 @@ import cartopy.crs as ccrs
 from shapely.geometry import Point
 
 from bokeh.io import curdoc
-
-#P#
-import numpy as np
-import joblib
-import torch
-import shap
+from dashboard.sensitivity_models import StaticSensitivity, RNNSensitivity
 
 class MainView(param.Parameterized):
     # Alle Variablen sollen in der Combobox auswählbar sein.
@@ -46,64 +41,42 @@ class MainView(param.Parameterized):
     # Global max für den Farbbereich (wird nach Berechnung gesetzt)
     global_max = param.Number(default=0)
 
-    # Daten
-    ds = param.ClassSelector(class_=object, default=None)
-    gdf = param.ClassSelector(class_=object, default=None)
-    all_vars = param.List(default=[])
-    time_vars = param.List(default=[])
-    static_vars = param.List(default=[])
+    # Zeitbereich (für Slider)
     time_min = param.CalendarDate(default=None)
     time_max = param.CalendarDate(default=None)
 
     # Tap-Stream für Klicks
     tap_stream = Tap(x=None, y=None, source=None)
-    var_cmaps = param.Dict(default={})
 
-    #P#
-    scaler = joblib.load("data/model/scaler.pkl")
-    model = torch.jit.load("data/model/model.pt")
-    sample = torch.load("data/model/sample_tensor.pt")
-
-    #P#
-    model.eval()
-    explainer  = shap.GradientExplainer(model, sample)
-    
-    #P#
-    scaler_static_rnn = joblib.load("data/model/scaler_static_rnn.pkl")
-    scaler_dynamic_rnn = joblib.load("data/model/scaler_dynamic_rnn.pkl")
-    model_rnn = torch.jit.load("data/model/model_rnn.pt")
-    sampled_static, sampled_dynamic = torch.load("data/model/sample_tensor_rnn.pt")
-
-    #P#
-    class WrappedModel(torch.nn.Module):
-        def __init__(self, model, n_static):
-            super().__init__()
-            self.model = model
-            self.n_static = n_static
-    
-        def forward(self, inputs):
-            static_input = inputs[:, :self.n_static]
-            dynamic_input = inputs[:, self.n_static:].reshape((inputs.shape[0], 7, 4))
-            return self.model(static_input, dynamic_input)
-
-    #P#
-    n_samples = sampled_static.shape[0]
-    n_static = sampled_static.shape[1]
-    model_rnn.eval()
-    wrapped_model = WrappedModel(model_rnn, n_static)
-    dynamic_unraveled = sampled_dynamic.reshape((n_samples, n_static)) # since 7*4 coincides with that
-    background = torch.cat([sampled_static, dynamic_unraveled], dim=1)
-    explainer_rnn = shap.GradientExplainer(wrapped_model, background)
-
-    def __init__(self, **params):
+    def __init__(self,
+                 var_metadata,
+                 ds,
+                 gdf,
+                 all_vars,
+                 time_vars,
+                 static_vars,
+                 var_cmaps,
+                 **params):
+        # Nicht-reaktive Daten und Konfiguration
+        self.var_metadata = var_metadata
+        self.ds = ds
+        self.gdf = gdf
+        self.all_vars = all_vars
+        self.time_vars = time_vars
+        self.static_vars = static_vars
+        self.var_cmaps = var_cmaps
+        # Restliche Parameter initialisieren
         super().__init__(**params)
-        # Setze die Auswahlmöglichkeiten: Hier sind all_vars (z.B. ["P", "T", ...]) enthalten.
+        # Variable Selector mit verfügbaren Variablen bestücken
         self.param.variable.objects = self.all_vars
         # Spinner als Ladeanzeige
         self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50,
                                                     css_classes=["spinner-centered"])
         # Wir legen später den Time-Slider fest:
         self.date_range_slider = None
+        # Sensitivity models
+        self.snn = StaticSensitivity()
+        self.rnn = RNNSensitivity()
 
     @property
     def date_range(self):
@@ -249,115 +222,6 @@ class MainView(param.Parameterized):
         ).opts(**opts_dict)
         self.tap_stream.source = polys
         return polys
-    
-    #P#
-    def sensitivity_analysis(self, df_input: pd.DataFrame) -> pd.DataFrame:
-
-        features = ['P', 'T', 'abb', 'area', 'atb', 'btk', 'dhm', 'glm', 'kwt', 'pfc',
-                'frac_water', 'frac_urban_areas', 'frac_coniferous_forests',
-                'frac_deciduous_forests', 'frac_mixed_forests', 'frac_cereals',
-                'frac_pasture', 'frac_bush', 'frac_unknown', 'frac_firn',
-                'frac_bare_ice', 'frac_rock', 'frac_vegetables',
-                'frac_alpine_vegetation', 'frac_wetlands', 'frac_sub_Alpine_meadow',
-                'frac_alpine_meadow', 'frac_bare_soil_vegetation', 'frac_grapes', 'slp', 
-                'time'] # time -> year, day_of_year
-        
-        assert(set(features).issubset(set(df_input.columns)))
-
-        df = df_input[features]
-        df["year"] = df["time"].dt.year
-        df["day_of_year"] = df["time"].dt.dayofyear
-        df.drop("time", axis=1, inplace=True)
-
-        df["Y"] = 0.0
-        df  = pd.DataFrame(self.scaler.transform(df), columns=df.columns)
-        df.drop("Y", axis=1, inplace=True)
-        ts = torch.tensor(df.to_numpy()) 
-
-        shap_values = self.explainer.shap_values(ts, nsamples=1000, rseed=42)
-        shap_values = shap_values.squeeze(axis=2)
-
-        df_shape = pd.DataFrame(shap_values, columns=df.columns)
-        df_avg = df_shape.mean().abs()
-        df_abs = df_avg.abs()
-        df_norm = df_abs / df_abs.sum() * 100
-        signed_norm = [np.sign(df_avg) * df_norm]
-        df_output = pd.DataFrame(signed_norm, columns=df.columns)
-
-        return df_output
-    
-    def sensitivity_analysis_rnn(self, df_input: pd.DataFrame) -> pd.DataFrame:
-
-        features_static = [ 'abb', 'area', 'atb', 'btk', 'dhm', 'glm', 'kwt', 'pfc',
-                            'frac_water', 'frac_urban_areas', 'frac_coniferous_forests',
-                            'frac_deciduous_forests', 'frac_mixed_forests', 'frac_cereals',
-                            'frac_pasture', 'frac_bush', 'frac_unknown', 'frac_firn',
-                            'frac_bare_ice', 'frac_rock', 'frac_vegetables',
-                            'frac_alpine_vegetation', 'frac_wetlands', 'frac_sub_Alpine_meadow',
-                            'frac_alpine_meadow', 'frac_bare_soil_vegetation', 'frac_grapes', 'slp'
-                          ]
-        
-        features_dynamic = ['P_6', 'T_6', 'time_6', 'P_5', 'T_5', 'time_5', 'P_4', 'T_4', 'time_4',
-                            'P_3', 'T_3', 'time_3', 'P_2', 'T_2', 'time_2', 'P_1', 'T_1', 'time_1',
-                            'P_0', 'T_0', 'time_0'
-                           ] # time -> year, day_of_year, predict Y_0
-        
-        assert(set(features_static + features_dynamic).issubset(set(df_input.columns)))
-
-        df = df_input[features_static + features_dynamic]
-
-        df["year_6"] = df["time_6"].dt.year
-        df["day_of_year_6"] = df["time_6"].dt.dayofyear
-        df["year_5"] = df["time_5"].dt.year
-        df["day_of_year_5"] = df["time_5"].dt.dayofyear
-        df["year_4"] = df["time_4"].dt.year
-        df["day_of_year_4"] = df["time_4"].dt.dayofyear
-        df["year_3"] = df["time_3"].dt.year
-        df["day_of_year_3"] = df["time_3"].dt.dayofyear
-        df["year_2"] = df["time_2"].dt.year
-        df["day_of_year_2"] = df["time_2"].dt.dayofyear
-        df["year_1"] = df["time_1"].dt.year
-        df["day_of_year_1"] = df["time_1"].dt.dayofyear
-        df["year_0"] = df["time_0"].dt.year
-        df["day_of_year_0"] = df["time_0"].dt.dayofyear
-
-        columns_to_drop = ["time_6", "time_5", "time_4", "time_3", "time_2", "time_1", "time_0"]
-        df.drop(columns=columns_to_drop, inplace=True)
-        df["Y"] = 0.0
-
-        d6 = ['P_6', 'T_6', 'year_6', 'day_of_year_6', 'Y']
-        d5 = ['P_5', 'T_5', 'year_5', 'day_of_year_5', 'Y']
-        d4 = ['P_4', 'T_4', 'year_4', 'day_of_year_4', 'Y']
-        d3 = ['P_3', 'T_3', 'year_3', 'day_of_year_3', 'Y']
-        d2 = ['P_2', 'T_2', 'year_2', 'day_of_year_2', 'Y']
-        d1 = ['P_1', 'T_1', 'year_1', 'day_of_year_1', 'Y']
-        d0 = ['P_0', 'T_0', 'year_0', 'day_of_year_0', 'Y']
-
-        df[d6]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d6]))
-        df[d5]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d5]))
-        df[d4]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d4]))
-        df[d3]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d3]))
-        df[d2]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d2]))
-        df[d1]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d1]))
-        df[d0]  = pd.DataFrame(self.scaler_dynamic_rnn.transform(df[d0]))
-
-        df[features_static]  = pd.DataFrame(self.scaler_static_rnn.transform(df[features_static]))
-
-        df.drop("Y", axis=1, inplace=True)
-
-        ts = torch.tensor(df.to_numpy()) 
-
-        shap_values = self.explainer_rnn.shap_values(ts, nsamples=1000, rseed=42)
-        shap_values = shap_values.squeeze(axis=2)
-
-        df_shape = pd.DataFrame(shap_values, columns=df.columns)
-        df_avg = df_shape.mean().abs()
-        df_abs = df_avg.abs()
-        df_norm = df_abs / df_abs.sum() * 100
-        signed_norm = [np.sign(df_avg) * df_norm]
-        df_output = pd.DataFrame(signed_norm, columns=df.columns)
-
-        return df_output
 
     @pn.depends('tap_stream.x', 'tap_stream.y', watch=False)
     def get_table(self):
@@ -391,9 +255,66 @@ class MainView(param.Parameterized):
                             row_data[var_name] = float(self.ds[var_name].sel(hru=hru_clicked).values)
                         except Exception:
                             row_data[var_name] = None
+                    # Grundlegende Werte-Tabelle
                     table_df = pd.DataFrame.from_dict(row_data, orient='index', columns=['Wert'])
                     table_df.index.name = 'Variable'
-                    return pn.widgets.DataFrame(table_df, height=400, width=300, fit_columns=True)
+                    table_widget = pn.widgets.DataFrame(table_df, height=300, width=300, fit_columns=True)
+                    # Statische Sensitivitätsanalyse (GradientExplainer) nur für Einzel-Tages-Auswahl
+                    if self.day_stride == 1:
+                        try:
+                            static_input = {}
+                            # Statische Merkmale
+                            for v in self.static_vars:
+                                static_input[v] = float(self.ds[v].sel(hru=hru_clicked).values)
+                            # Dynamische Merkmale: P und T am Einzel-Tag (kein Rolling nötig)
+                            date = pd.to_datetime(self.start_date)
+                            static_input['P'] = float(self.ds['P'].sel(hru=hru_clicked, time=date).values)
+                            static_input['T'] = float(self.ds['T'].sel(hru=hru_clicked, time=date).values)
+                            # Zeit-Feature für Analyse (Startdatum)
+                            static_input['time'] = pd.to_datetime(self.start_date)
+                            df_static_input = pd.DataFrame([static_input])
+                            df_static_sens = self.snn.analyze(df_static_input)
+                            # Formatieren der Sensitivitätstabelle
+                            static_sens_table = df_static_sens.T
+                            static_sens_table.columns = ['Beitrag [%]']
+                            static_sens_table.index.name = 'Feature'
+                            static_sens_widget = pn.widgets.DataFrame(static_sens_table, fit_columns=True)
+                        except Exception as e:
+                            static_sens_widget = pn.pane.Markdown(f"Fehler in statischer Sensitivitätsanalyse: {e}")
+                    else:
+                        static_sens_widget = pn.pane.Markdown("Statische Sensitivitätsanalyse nur für Einzel-Tages-Auswahl (day_stride=1) verfügbar.")
+                    # RNN-Sensitivitätsanalyse (GradientExplainer)
+                    try:
+                        rnn_input = {}
+                        # Statische Merkmale
+                        for v in self.static_vars:
+                            rnn_input[v] = float(self.ds[v].sel(hru=hru_clicked).values)
+                        # Referenzdatum (Ende des ausgewählten Zeitraums)
+                        date_end = pd.to_datetime(self.end_date)
+                        # Dynamisches Fenster der letzten 7 Tage
+                        for i in range(6, -1, -1):
+                            date_i = date_end - pd.Timedelta(days=i)
+                            rnn_input[f'P_{i}'] = float(self.ds['P'].sel(hru=hru_clicked, time=date_i).values)
+                            rnn_input[f'T_{i}'] = float(self.ds['T'].sel(hru=hru_clicked, time=date_i).values)
+                            rnn_input[f'time_{i}'] = date_i
+                        df_rnn_input = pd.DataFrame([rnn_input])
+                        df_rnn_sens = self.rnn.analyze(df_rnn_input)
+                        # Formatieren der Sensitivitätstabelle
+                        rnn_sens_table = df_rnn_sens.T
+                        rnn_sens_table.columns = ['Beitrag [%]']
+                        rnn_sens_table.index.name = 'Feature'
+                        rnn_sens_widget = pn.widgets.DataFrame(rnn_sens_table, fit_columns=True)
+                    except Exception as e:
+                        rnn_sens_widget = pn.pane.Markdown(f"Fehler in RNN Sensitivitätsanalyse: {e}")
+                    # Zusammenführen aller Ansichten
+                    return pn.Column(
+                        pn.pane.Markdown(f"### HRU {hru_clicked} - Detailansicht"),
+                        table_widget,
+                        pn.pane.Markdown("### Statische Modell-Sensitivität"),
+                        static_sens_widget,
+                        pn.pane.Markdown("### RNN Modell-Sensitivität"),
+                        rnn_sens_widget
+                    )
                 else:
                     return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.")
             else:
