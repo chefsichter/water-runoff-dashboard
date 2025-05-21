@@ -67,7 +67,6 @@ def create_aggregation_widget(main_view, hru_clicked):
             show_index=False,
             layout='fit_data',
             widths={'Wert': 100},
-            height=300,
             sizing_mode='stretch_width',
             disabled=True
         )

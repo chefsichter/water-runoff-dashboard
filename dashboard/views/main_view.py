@@ -4,8 +4,6 @@ from contextlib import contextmanager
 
 from dashboard.widgets.play_button import create_play_button
 from dashboard.widgets.speed_widget import create_speed_widget
-from dashboard.widgets.table_snn_widget import create_static_sensitivity_widget
-from dashboard.widgets.table_rnn_widget import create_rnn_sensitivity_widget
 from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
 
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
@@ -313,28 +311,13 @@ class MainView(param.Parameterized):
                     # Bei Markdown-Fallback direkt zurückgeben
                     if table_hru is None:
                         return table_widget
-                    # Statische und RNN Sensitivitätsanalyse nebeneinander anzeigen
-                    static_sens_widget = create_static_sensitivity_widget(self, hru_clicked)
-                    rnn_sens_widget = create_rnn_sensitivity_widget(self, hru_clicked)
-                    # Layout: Sensitivitäten in Zeile
-                    top_row = pn.Row(
-                        pn.Column(
-                            pn.pane.Markdown("### Statische Modell-Sensitivität"),
-                            static_sens_widget
-                        ),
-                        pn.Column(
-                            pn.pane.Markdown("### RNN Modell-Sensitivität"),
-                            rnn_sens_widget
-                        ),
-                        sizing_mode="stretch_width"
-                    )
                     # Aggregationstabelle mit Titel und voller Breite
                     agg_panel = pn.Column(
                         pn.pane.Markdown("### Basiswerte"),
                         table_widget,
                         sizing_mode="stretch_width"
                     )
-                    return pn.Column(top_row, agg_panel, sizing_mode="stretch_width")
+                    return agg_panel
                 else:
                     # Kein Polygon unter Klickpunkt: nur Markdown ausgeben
                     return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.", width=300)
@@ -426,18 +409,26 @@ class MainView(param.Parameterized):
             sizing_mode="stretch_width"
         )
 
-        # Aufbau des Hauptinhalts: Karte (Map) und Tabelle (Detailansicht)
+        # Aufbau des Hauptinhalts: Karte (Map) und Tabelle (Detailansicht) mit gleicher Breite
+        # Map-Panel responsiv in der Breite
         map1 = pn.panel(self.get_map,
                         linked_axes=False,
                         sizing_mode="scale_width")
+        # Linke Spalte (Map) und rechte Spalte (Tabelle) gleichmäßig breiten
+        left = pn.Column(
+            map1,
+            sizing_mode="stretch_width",
+        )
+        right = pn.Column(
+            pn.pane.Markdown("### Wichtige Daten / Einsichten"),
+            self.get_table,
+            scroll=True,
+            sizing_mode="stretch_width",
+        )
         main_area = pn.Row(
-            pn.Column(map1),
-            pn.Column(
-                pn.pane.Markdown("### Wichtige Daten / Einsichten"),
-                self.get_table,
-                height=500,
-                scroll=True
-            )
+            left,
+            right,
+            sizing_mode="stretch_width"
         )
 
         # Erzeuge zweite Karte (absolute Differenz Y zwischen den Runoff-Modellen)
