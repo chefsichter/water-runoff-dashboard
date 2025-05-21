@@ -1,10 +1,7 @@
 import asyncio
 import os
-import textwrap
 from contextlib import contextmanager
 
-from dashboard.config.settings import START_DATE, END_DATE, YEAR_START_DATE, \
-    YEAR_END_DATE
 from dashboard.widgets.play_button import create_play_button
 from dashboard.widgets.speed_widget import create_speed_widget
 from dashboard.widgets.table_snn_widget import create_static_sensitivity_widget
@@ -236,7 +233,9 @@ class MainView(param.Parameterized):
             colorbar=True,
             line_color='black',
             line_width=0.1,
-            active_tools=['wheel_zoom']
+            active_tools=['wheel_zoom'],
+            width=800,
+            height=500
         )
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         return polys
@@ -257,7 +256,9 @@ class MainView(param.Parameterized):
             colorbar=True,
             line_color='black',
             line_width=0.1,
-            active_tools=['wheel_zoom']
+            active_tools=['wheel_zoom'],
+            width=800,
+            height=500
         )
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         return polys
@@ -375,6 +376,15 @@ class MainView(param.Parameterized):
 
         return date_range_slider
 
+    @pn.depends('variable')
+    def get_map3_title(self):
+        """Dynamischer Titel für Map 3 basierend auf dem ausgeschriebenen Variablennamen."""
+        # Hole die lange Beschreibung aus den Metadaten oder fallback auf den Kurzname
+        meta = self.var_metadata.get(self.variable, {})
+        long_name = meta.get('long_name') or self.variable
+        # Zeige SHAP-Werte-Überschrift mit ausgeschriebenem Namen
+        return f"### SHAP-Werte für {long_name}"
+
     def panel_view(self):
         # Erzeuge den Zeitschieberegler (DateSlider)
         self.date_range_slider = self.get_date_range_slider()
@@ -417,7 +427,9 @@ class MainView(param.Parameterized):
         )
 
         # Aufbau des Hauptinhalts: Karte (Map) und Tabelle (Detailansicht)
-        map1 = pn.panel(self.get_map, linked_axes=False)
+        map1 = pn.panel(self.get_map,
+                        linked_axes=False,
+                        sizing_mode="scale_width")
         main_area = pn.Row(
             pn.Column(map1),
             pn.Column(
@@ -428,15 +440,31 @@ class MainView(param.Parameterized):
             )
         )
 
-        # Erzeuge zweite Karte (Shap DS für ds-Variable)
-        map2 = pn.panel(self.get_map_run_off_diff, linked_axes=False, sizing_mode="stretch_width")
-        # Erzeuge dritte Karte (Shap DS mit eigener Variable-Auswahl)
-        map3 = pn.panel(self.get_map_shap_ds, linked_axes=False, sizing_mode="stretch_width")
+        # Erzeuge zweite Karte (absolute Differenz Y zwischen den Runoff-Modellen)
+        map2 = pn.panel(
+            self.get_map_run_off_diff,
+            linked_axes=False,
+            sizing_mode="scale_width"
+        )
+        # Erzeuge dritte Karte (SHAP-Werte für gewählte Variable)
+        map3 = pn.panel(
+            self.get_map_shap_ds,
+            linked_axes=False,
+            sizing_mode="scale_width"
+        )
 
-        # packe Karte 2 und 3 nebeneinander
+        # Packe Karte 2 und 3 nebeneinander mit passenden Titeln und korrektem Seitenverhältnis
         maps_row = pn.Row(
-            pn.Column("### Karte 2", map2, sizing_mode="stretch_width"),
-            pn.Column("### Karte 3", map3, sizing_mode="stretch_width"),
+            pn.Column(
+                pn.pane.Markdown("### Absolute Differenz zwischen den beiden Runoff-Modellen (Y)"),
+                map2,
+                sizing_mode="stretch_width"
+            ),
+            pn.Column(
+                pn.panel(self.get_map3_title),
+                map3,
+                sizing_mode="stretch_width"
+            ),
             sizing_mode="stretch_width"
         )
 
