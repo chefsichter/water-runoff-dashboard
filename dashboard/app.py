@@ -3,12 +3,11 @@ import panel as pn
 import holoviews as hv
 
 from dashboard.config.settings import END_DATE, START_DATE, YEAR_START_DATE, YEAR_END_DATE, INIT_DAY_STRIDE
-from dashboard.css.custom_css import load_custom_css
 from dashboard.views.main_view import MainView
 from dashboard.views.modal_view import show_var_infos
 from dashboard.views.sidebar_view import create_sidebar, create_sidebar_widgets
 from dashboard.widgets.year_range_slider import set_map_bounds
-
+from dashboard.css.custom_css import load_custom_css
 # Widget-Funktionen importieren:
 pn.extension('tabulator')
 hv.extension("bokeh")
@@ -23,7 +22,7 @@ def create_app():
     shap_ds_path = script_dir.parent / "Model" / "Training" / "shap_rnn.nc"
 
     # Custom CSS laden (falls vorhanden)
-    # load_custom_css(script_dir)
+    load_custom_css()
 
     # Daten laden
     gdf, ds, shap_ds = load_data(shapefile_path, netcdf_path, shap_ds_path)
