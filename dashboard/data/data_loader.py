@@ -64,7 +64,37 @@ def get_var_colormaps():
         'P': 'Blues',            # z.B. Niederschlag
         'Qmm_mod': 'Blues',      # Runoff
         'Qmm_prevah': 'Blues',   # Runoff
-        'T': 'Reds',             # Temperatur
+        'T': 'RdBu_r',           # Temperatur
+        'abb': 'YlGnBu',
+        'area': 'Greys',
+        'atb': 'PuBu',
+        'btk': 'YlGnBu',
+        'dhm': 'viridis',
+        'glm': 'PuBuGn',
+        'kwt': 'PuBu',
+        'pfc': 'YlGnBu',
+        'frac_water': 'Blues',
+        'frac_urban_areas': 'Greys',
+        'frac_coniferous_forests': 'YlGn',
+        'frac_deciduous_forests': 'YlGn',
+        'frac_mixed_forests': 'YlGn',
+        'frac_cereals': 'YlOrBr',
+        'frac_pasture': 'YlGn',
+        'frac_bush': 'YlOrBr',
+        'frac_unknown': 'viridis',
+        'frac_firn': 'viridis',
+        'frac_bare_ice': 'Greys',
+        'frac_rock': 'Greys',
+        'frac_vegetables': 'YlOrBr',
+        'frac_alpine_vegetation': 'viridis',
+        'frac_wetlands': 'BuGn',
+        'frac_sub_Alpine_meadow': 'YlGn',
+        'frac_alpine_meadow': 'YlGn',
+        'frac_bare_soil_vegetation': 'YlGnBu',
+        'frac_grapes': 'YlOrBr',
+        'slp': 'viridis',
+        'hru': 'viridis',
+        'time': 'viridis',
         '*default*': 'Viridis'
     }
 
