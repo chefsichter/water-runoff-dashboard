@@ -187,7 +187,7 @@ class MainView(param.Parameterized):
         if var_name in self.shap_ds.data_vars:
             return var_name
         # Spezielle Zuordnungen
-        mapping = {'P': 'P_T-0', 'T': 'T_T-0'}
+        mapping = {'P': 'sum_P', 'T': 'sum_T'}
         return mapping.get(var_name)
     
     # Aggregation für shap_ds, analog zu _aggregate_data
