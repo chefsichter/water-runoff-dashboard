@@ -20,12 +20,13 @@ def create_app():
     script_dir = Path(__file__).resolve().parent
     netcdf_path = script_dir.parent / "data" / "CHRUN" / "chrun.nc"
     shapefile_path = script_dir.parent / "data" / "CHRUN" / "catchments" / 'catchments.shp'
+    shap_ds_path = script_dir.parent / "Model" / "Training" / "shap_rnn.nc"
 
     # Custom CSS laden (falls vorhanden)
     # load_custom_css(script_dir)
 
     # Daten laden
-    gdf, ds = load_data(shapefile_path, netcdf_path)
+    gdf, ds, shap_ds = load_data(shapefile_path, netcdf_path, shap_ds_path)
     time_min, time_max = get_time_bounds(ds)
     all_vars, time_vars, static_vars, var_metadata = get_variable_lists(ds)
     var_cmaps = get_var_colormaps()
@@ -50,6 +51,7 @@ def create_app():
     main_view = MainView(
         var_metadata=var_metadata,
         ds=ds,
+        shap_ds=shap_ds,
         gdf=gdf,
         all_vars=all_vars,
         time_vars=time_vars,

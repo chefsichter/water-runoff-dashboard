@@ -3,7 +3,7 @@ import pandas as pd
 import xarray as xr
 from pathlib import Path
 
-def load_data(shp_path, nc_path):
+def load_data(shp_path, nc_path, shap_ds_path):
     """
     Lädt die Shapefile- und NetCDF-Daten und gibt (gdf, ds) zurück.
     - gdf: GeoDataFrame mit den Catchment-Polygonen
@@ -14,12 +14,13 @@ def load_data(shp_path, nc_path):
 
     # NetCDF laden
     ds = xr.open_dataset(nc_path)
+    shap_ds = xr.open_dataset(shap_ds_path)
 
     # Neu: Reprojektion von EPSG:21781 zu EPSG:4326
     if gdf.crs is not None and gdf.crs.to_string() == "EPSG:21781":
         gdf = gdf.to_crs(epsg=4326)
 
-    return gdf, ds
+    return gdf, ds, shap_ds
 
 def get_time_bounds(ds):
     """
