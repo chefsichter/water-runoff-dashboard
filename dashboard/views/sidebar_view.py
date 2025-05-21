@@ -2,6 +2,7 @@
 import panel as pn
 
 from dashboard.config.settings import INIT_VAR, INIT_DAY_STRIDE, START_DATE, END_DATE
+from dashboard.widgets.agg_selector import create_agg_selector
 from dashboard.widgets.date_picker import create_date_picker
 from dashboard.widgets.info_button import create_info_button
 from dashboard.widgets.stride_widget import create_stride_widget
@@ -20,10 +21,11 @@ def create_sidebar_widgets(time_min, time_max, year_start_date, year_end_date, s
     stride_widget = create_stride_widget(INIT_DAY_STRIDE)
     start_date_picker = create_date_picker("📅 Startdatum", start_date)
     end_date_picker = create_date_picker("⌛ Enddatum", end_date)
-    return end_date_picker, info_button, start_date_picker, stride_widget, var_selector, year_range_slider
+    agg_selector = create_agg_selector()
+    return end_date_picker, info_button, start_date_picker, stride_widget, var_selector, year_range_slider, agg_selector
 
 
-def create_sidebar(var_selector, info_button, year_range_slider, start_date_picker, end_date_picker, stride_widget):
+def create_sidebar(var_selector, info_button, year_range_slider, start_date_picker, end_date_picker, stride_widget, agg_selector):
     # Kombiniere Variablenselektion und Info-Button in einer Zeile
     var_info_btn_row = pn.Row(
         pn.Spacer(width=10),
@@ -52,9 +54,15 @@ def create_sidebar(var_selector, info_button, year_range_slider, start_date_pick
     )
 
     # Abschnitt "Karteneinstellungen"
+    # Abschnitt Aggregationseinstellungen inklusive Funktionenauswahl
     aggregation_section = pn.Column(
         pn.pane.Markdown("### ∑ Aggregationseinstellungen", margin=(15, 10, 0, 10)),
-        aggregation_row)
+        aggregation_row,
+        pn.Row(
+            agg_selector,
+            sizing_mode='stretch_width'
+        )
+    )
 
     # Gesamtes Sidebar‑Layout
     sidebar = pn.Column(

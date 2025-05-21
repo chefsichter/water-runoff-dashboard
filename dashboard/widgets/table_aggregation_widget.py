@@ -18,7 +18,7 @@ def create_aggregation_widget(main_view, hru_clicked):
         for dyn in ['P', 'T', 'Qmm_mod', 'Qmm_prevah']:
             if dyn in main_view.time_vars:
                 try:
-                    dyn_da = main_view._aggregate_data(dyn, time_value, main_view.day_stride)
+                    dyn_da = main_view.aggregate_data(dyn, time_value, main_view.ds)
                     row_data[dyn] = float(dyn_da.sel(hru=hru_clicked).values)
                 except Exception:
                     row_data[dyn] = None
@@ -26,7 +26,7 @@ def create_aggregation_widget(main_view, hru_clicked):
         # Aktuelle Variable (evtl. dynamisch oder statisch)
         if var_name in main_view.time_vars and var_name not in dynamic_keys:
             try:
-                var_da = main_view._aggregate_data(var_name, time_value, main_view.day_stride)
+                var_da = main_view.aggregate_data(var_name, time_value, main_view.ds)
                 row_data[var_name] = float(var_da.sel(hru=hru_clicked).values)
             except Exception:
                 row_data[var_name] = None

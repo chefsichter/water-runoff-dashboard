@@ -1,6 +1,8 @@
 from pathlib import Path
 import panel as pn
+pn.extension('tabulator')
 import holoviews as hv
+hv.extension("bokeh")
 
 from dashboard.config.settings import END_DATE, START_DATE, YEAR_START_DATE, YEAR_END_DATE, INIT_DAY_STRIDE
 from dashboard.views.main_view import MainView
@@ -8,9 +10,6 @@ from dashboard.views.modal_view import show_var_infos
 from dashboard.views.sidebar_view import create_sidebar, create_sidebar_widgets
 from dashboard.widgets.year_range_slider import set_map_bounds
 from dashboard.css.custom_css import load_custom_css
-# Widget-Funktionen importieren:
-pn.extension('tabulator')
-hv.extension("bokeh")
 from dashboard.data.data_loader import load_data, get_time_bounds, get_variable_lists, get_var_colormaps
 
 
@@ -70,10 +69,17 @@ def create_app():
      start_date_picker,
      stride_widget,
      var_selector,
-     year_range_slider) = create_sidebar_widgets(time_min, time_max,
-                                                 YEAR_START_DATE, YEAR_END_DATE,
-                                                 START_DATE, END_DATE,
-                                                 all_vars, var_metadata)
+     year_range_slider,
+     agg_selector) = create_sidebar_widgets(
+        time_min,
+        time_max,
+        YEAR_START_DATE,
+        YEAR_END_DATE,
+        START_DATE,
+        END_DATE,
+        all_vars,
+        var_metadata
+    )
 
     # Verknüpfungen der Widgets
     var_selector.link(main_view, value='variable', bidirectional=True)
@@ -82,10 +88,19 @@ def create_app():
     start_date_picker.link(main_view, value='start_date', bidirectional=True)
     end_date_picker.link(main_view, value='end_date', bidirectional=True)
     stride_widget.link(main_view, value='day_stride', bidirectional=True)
+    # Link Aggregationsfunktion an MainView
+    agg_selector.link(main_view, value='agg_method', bidirectional=True)
 
     # Sidebar-Layout erstellen, indem die bereits erstellten Widgets übergeben werden
-    sidebar = create_sidebar(var_selector, info_button, year_range_slider, start_date_picker, end_date_picker,
-                             stride_widget)
+    sidebar = create_sidebar(
+        var_selector,
+        info_button,
+        year_range_slider,
+        start_date_picker,
+        end_date_picker,
+        stride_widget,
+        agg_selector
+    )
 
     # Füge die einzelnen Teile zusammen
     bootstrap.sidebar.append(sidebar)

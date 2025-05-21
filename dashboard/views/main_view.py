@@ -45,6 +45,13 @@ class MainView(param.Parameterized):
     time_min = param.CalendarDate(default=None)
     time_max = param.CalendarDate(default=None)
 
+    # Aggregationsfunktion für Zeitdimension (sum, mean, max, min)
+    agg_method = param.ObjectSelector(
+        default='sum',
+        objects=['sum', 'mean', 'max', 'min'],
+        label='Aggregation'
+    )
+
     # Tap-Stream für Klicks
     tap_stream = Tap(x=None, y=None, source=None)
 
@@ -86,7 +93,6 @@ class MainView(param.Parameterized):
 
     @date_range.setter
     def date_range(self, value):
-        # Optional kannst du hier eine Validierung einbauen
         self.start_date, self.end_date = value
 
     @contextmanager
@@ -116,7 +122,7 @@ class MainView(param.Parameterized):
     def get_start_date(self):
         return self.date_range[0]
 
-    def compute_global_max(self):
+    def compute_global_max(self): # todo: remove
         """
         Berechnet über den gesamten Datensatz (für die aktuell ausgewählte Variable und day_stride)
         den maximalen aggregierten Wert. Während der Berechnung wird ein Spinner angezeigt.
@@ -171,14 +177,22 @@ class MainView(param.Parameterized):
             return self.var_cmaps[var_name]
         return self.var_cmaps.get('*default*', 'Viridis')
 
-    def _aggregate_data(self, var_name, time_value, day_stride):
-        da = self.ds[var_name]
+    def aggregate_data(self, var_name, time_value, dataset):
+        da = dataset[var_name]
         if 'time' in da.dims:
+            # Slice nach Zeitbereich
             if isinstance(time_value, (list, tuple)):
                 start_date = pd.to_datetime(time_value[0])
                 end_date = pd.to_datetime(time_value[1])
+            else:
+                start_date = pd.to_datetime(time_value)
+                end_date = pd.to_datetime(time_value)
             sel_da = da.sel(time=slice(start_date, end_date))
-            agg_da = sel_da.sum(dim='time')
+            # Dynamische Aggregation entsprechend ausgewählter Methode
+            try:
+                agg_da = getattr(sel_da, self.agg_method)(dim='time')
+            except Exception:
+                agg_da = sel_da.sum(dim='time')
         else:
             agg_da = da
         return agg_da
@@ -192,35 +206,14 @@ class MainView(param.Parameterized):
         mapping = {'P': 'sum_P', 'T': 'sum_T'}
         return mapping.get(var_name)
     
-    # Aggregation für shap_ds, analog zu _aggregate_data
-    def _aggregate_shap(self, var_name, time_value, day_stride):
-        shap_var = self._map_shap_var(var_name)
-        if shap_var is None or shap_var not in self.shap_ds.data_vars:
-            return None
-        da = self.shap_ds[shap_var]
-        if 'time' in da.dims:
-            if isinstance(time_value, (list, tuple)):
-                start_date = pd.to_datetime(time_value[0])
-                end_date = pd.to_datetime(time_value[1])
-            else:
-                start_date = pd.to_datetime(time_value)
-                end_date = pd.to_datetime(time_value)
-            sel_da = da.sel(time=slice(start_date, end_date))
-            agg_da = sel_da.sum(dim='time')
-        else:
-            agg_da = da
-        # Vereinheitliche Name für Anzeige
-        agg_da.name = var_name
-        return agg_da
-    
-    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', watch=False)
+    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', 'agg_method', watch=False)
     def get_map_shap_ds(self):
         """Zeigt SHAP-Werte für die aktuell gewählte Variable aus ds."""
         var_name = self.variable
         shap_var = self._map_shap_var(var_name)
         if shap_var is None or shap_var not in self.shap_ds.data_vars:
             return pn.pane.Markdown(f"Keine SHAP-Werte für Variable {var_name} vorhanden.", width=300)
-        agg_da = self._aggregate_shap(var_name, self.date_range, self.day_stride)
+        agg_da = self.aggregate_data(shap_var, self.date_range, self.shap_ds)
         if agg_da is None:
             return pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
         df_values = agg_da.to_series().to_frame(name=var_name)
@@ -241,10 +234,10 @@ class MainView(param.Parameterized):
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         return polys
 
-    @pn.depends('day_stride', 'start_date', 'end_date', watch=False)
+    @pn.depends('day_stride', 'start_date', 'end_date', 'agg_method', watch=False)
     def get_map_run_off_diff(self):
         var_name = 'Y'
-        agg_da = self._aggregate_shap(var_name, self.date_range, self.day_stride)
+        agg_da = self.aggregate_data(var_name, self.date_range, self.shap_ds)
         if agg_da is None:
             return pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
         df_values = agg_da.to_series().to_frame(name=var_name)
@@ -266,7 +259,7 @@ class MainView(param.Parameterized):
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         return polys
 
-    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', watch=False)
+    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', 'agg_method', watch=False)
     async def get_map(self):
         await asyncio.sleep(0.1)
         var_name = self.variable
@@ -274,7 +267,7 @@ class MainView(param.Parameterized):
             return hv.Curve([]).opts(width=800, height=500)
         # Immer den Zeitbereich nutzen:
         time_value = self.date_range
-        agg_da = self._aggregate_data(var_name, time_value, self.day_stride)
+        agg_da = self.aggregate_data(var_name, time_value, self.ds)
         df_values = agg_da.to_series().to_frame(name=var_name)
         merged = self.gdf.join(df_values, on="hru", how="inner")
         merged = merged.dropna(subset=[var_name])
@@ -362,14 +355,18 @@ class MainView(param.Parameterized):
 
         return date_range_slider
 
-    @pn.depends('variable')
-    def get_map3_title(self):
-        """Dynamischer Titel für Map 3 basierend auf dem ausgeschriebenen Variablennamen."""
-        # Hole die lange Beschreibung aus den Metadaten oder fallback auf den Kurzname
+    def _get_long_name(self, variable):
         meta = self.var_metadata.get(self.variable, {})
         long_name = meta.get('long_name') or self.variable
-        # Zeige SHAP-Werte-Überschrift mit ausgeschriebenem Namen
-        return f"### SHAP-Werte für {long_name}"
+        return long_name
+
+    @pn.depends('variable')
+    def get_map1_title(self):
+        return pn.panel(f"### Aggregierte Werte für '{self._get_long_name(self.variable)}'")
+
+    @pn.depends('variable')
+    def get_map3_title(self):
+        return pn.panel(f"### Aggregierte SHAP-Werte für '{self._get_long_name(self.variable)}'")
 
     def panel_view(self):
         # Erzeuge den Zeitschieberegler (DateSlider)
@@ -419,11 +416,12 @@ class MainView(param.Parameterized):
                         sizing_mode="scale_width")
         # Linke Spalte (Map) und rechte Spalte (Tabelle) gleichmäßig breiten
         left = pn.Column(
+            self.get_map1_title,
             map1,
             sizing_mode="stretch_width",
         )
         right = pn.Column(
-            pn.pane.Markdown("### Basiswerte"),
+            pn.pane.Markdown("### Aggregierte Werte (per HRU)"),
             self.get_table,
             scroll=True,
         )
@@ -449,12 +447,12 @@ class MainView(param.Parameterized):
         # Packe Karte 2 und 3 nebeneinander mit passenden Titeln und korrektem Seitenverhältnis
         maps_row = pn.Row(
             pn.Column(
-                pn.pane.Markdown("### Absolute Differenz zwischen den beiden Runoff-Modellen (Y)"),
+                pn.pane.Markdown("### Aggregierte absolute Differenz zwischen den Runoff-Modellen ('Y')"),
                 map2,
                 sizing_mode="stretch_width"
             ),
             pn.Column(
-                pn.panel(self.get_map3_title),
+                self.get_map3_title,
                 map3,
                 sizing_mode="stretch_width"
             ),
