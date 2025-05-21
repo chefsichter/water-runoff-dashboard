@@ -227,7 +227,7 @@ class MainView(param.Parameterized):
             projection=ccrs.Mercator(),
             tools=['hover', 'tap'],
             color=var_name,
-            cmap=self._get_cmap_for_var(var_name),
+            cmap='coolwarm',
             colorbar=True,
             line_color='black',
             line_width=0.1,
@@ -236,7 +236,7 @@ class MainView(param.Parameterized):
         )
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         return polys
-    
+
     @pn.depends('day_stride', 'start_date', 'end_date', watch=False)
     def get_map_run_off_diff(self):
         var_name = 'Y'
@@ -249,13 +249,15 @@ class MainView(param.Parameterized):
             projection=ccrs.Mercator(),
             tools=['hover', 'tap'],
             color=var_name,
-            cmap=self._get_cmap_for_var(var_name),
+            cmap='YlGn',
             colorbar=True,
             line_color='black',
             line_width=0.1,
             width=800,
             height=500
         )
+        vmax = max(abs(merged[var_name].max()), abs(merged[var_name].min()))
+        opts['clim'] = (-vmax, vmax)
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         return polys
 
