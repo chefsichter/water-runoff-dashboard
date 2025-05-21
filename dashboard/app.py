@@ -44,7 +44,7 @@ def create_app():
 }
 """)
     # Bootstrap-Template erzeugen
-    bootstrap = pn.template.BootstrapTemplate(title="📊💧 Water Runoff Trends in Switzerland")
+    bootstrap = pn.template.BootstrapTemplate(title="📊💧 Water Runoff Dashboard")
 
     # MainView erzeugen
     # MainView erzeugen (inkl. Variable Metadata)
@@ -97,4 +97,4 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    pn.serve(app, title="Water Runoff Trends", show=True, port=1961)
+    pn.serve(app, title="Water Runoff Dashboard", show=True, port=1961)
