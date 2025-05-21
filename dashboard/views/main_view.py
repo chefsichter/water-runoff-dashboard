@@ -2,7 +2,6 @@ import asyncio
 import os
 import textwrap
 from contextlib import contextmanager
-import xarray as xr
 
 from dashboard.config.settings import START_DATE, END_DATE, YEAR_START_DATE, \
     YEAR_END_DATE
@@ -55,6 +54,7 @@ class MainView(param.Parameterized):
     def __init__(self,
                  var_metadata,
                  ds,
+                 shap_ds,
                  gdf,
                  all_vars,
                  time_vars,
@@ -64,6 +64,7 @@ class MainView(param.Parameterized):
         # Nicht-reaktive Daten und Konfiguration
         self.var_metadata = var_metadata
         self.ds = ds
+        self.shap_ds = shap_ds
         self.gdf = gdf
         self.all_vars = all_vars
         self.time_vars = time_vars
@@ -81,8 +82,6 @@ class MainView(param.Parameterized):
         # Sensitivity-Modelle
         self.snn = StaticSensitivity()
         self.rnn = RNNSensitivity()
-        # NEU: SHAP-Daten laden
-        self.shap_ds = xr.open_dataset("../AI4GOOD/Model/Training/shap_rnn.nc")
 
     @property
     def date_range(self):
@@ -181,19 +180,88 @@ class MainView(param.Parameterized):
             if isinstance(time_value, (list, tuple)):
                 start_date = pd.to_datetime(time_value[0])
                 end_date = pd.to_datetime(time_value[1])
-            else:
-                start_date = pd.to_datetime(time_value)
-                if day_stride > 1:
-                    end_date = start_date + pd.Timedelta(days=day_stride - 1)
-                else:
-                    end_date = start_date
             sel_da = da.sel(time=slice(start_date, end_date))
             agg_da = sel_da.sum(dim='time')
         else:
             agg_da = da
         return agg_da
-
     
+    # Hilfsfunktion: Mappe ds-Variablennamen auf shap_ds-Variablen
+    def _map_shap_var(self, var_name):
+        # Direkter Name
+        if var_name in self.shap_ds.data_vars:
+            return var_name
+        # Spezielle Zuordnungen
+        mapping = {'P': 'P_T-0', 'T': 'T_T-0'}
+        return mapping.get(var_name)
+    
+    # Aggregation für shap_ds, analog zu _aggregate_data
+    def _aggregate_shap(self, var_name, time_value, day_stride):
+        shap_var = self._map_shap_var(var_name)
+        if shap_var is None or shap_var not in self.shap_ds.data_vars:
+            return None
+        da = self.shap_ds[shap_var]
+        if 'time' in da.dims:
+            if isinstance(time_value, (list, tuple)):
+                start_date = pd.to_datetime(time_value[0])
+                end_date = pd.to_datetime(time_value[1])
+            else:
+                start_date = pd.to_datetime(time_value)
+                end_date = pd.to_datetime(time_value)
+            sel_da = da.sel(time=slice(start_date, end_date))
+            agg_da = sel_da.sum(dim='time')
+        else:
+            agg_da = da
+        # Vereinheitliche Name für Anzeige
+        agg_da.name = var_name
+        return agg_da
+    
+    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', watch=False)
+    def get_map_shap_ds(self):
+        """Zeigt SHAP-Werte für die aktuell gewählte Variable aus ds."""
+        var_name = self.variable
+        shap_var = self._map_shap_var(var_name)
+        if shap_var is None or shap_var not in self.shap_ds.data_vars:
+            return pn.pane.Markdown(f"Keine SHAP-Werte für Variable {var_name} vorhanden.", width=300)
+        agg_da = self._aggregate_shap(var_name, self.date_range, self.day_stride)
+        if agg_da is None:
+            return pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
+        df_values = agg_da.to_series().to_frame(name=var_name)
+        merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
+        opts = dict(
+            projection=ccrs.Mercator(),
+            tools=['hover', 'tap'],
+            color=var_name,
+            cmap=self._get_cmap_for_var(var_name),
+            colorbar=True,
+            line_color='black',
+            line_width=0.1,
+            active_tools=['wheel_zoom']
+        )
+        polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
+        return polys
+    
+    @pn.depends('day_stride', 'start_date', 'end_date', watch=False)
+    def get_map_run_off_diff(self):
+        var_name = 'Y'
+        agg_da = self._aggregate_shap(var_name, self.date_range, self.day_stride)
+        if agg_da is None:
+            return pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
+        df_values = agg_da.to_series().to_frame(name=var_name)
+        merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
+        opts = dict(
+            projection=ccrs.Mercator(),
+            tools=['hover', 'tap'],
+            color=var_name,
+            cmap=self._get_cmap_for_var(var_name),
+            colorbar=True,
+            line_color='black',
+            line_width=0.1,
+            active_tools=['wheel_zoom']
+        )
+        polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
+        return polys
+
     @pn.depends('variable', 'day_stride', 'start_date', 'end_date', watch=False)
     async def get_map(self):
         await asyncio.sleep(0.1)
@@ -272,60 +340,6 @@ class MainView(param.Parameterized):
             else:
                 # Vor dem Klick: Hinweistext anzeigen
                 return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.", width=300)
-    
-    #Funktioniert nicht diese Funktion
-    """ 
-    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', watch=False)
-    async def get_map2(self):
-        await asyncio.sleep(0.1)
-        # Beispiel: Hier gehst du davon aus, dass die Variable auch im SHAP-File enthalten ist
-        var_name = self.variable
-        if var_name is None or var_name not in self.shap_ds:
-            return hv.Curve([]).opts(width=800, height=500)
-        time_value = self.date_range
-
-        # Aggregiere Daten ähnlich wie oben – hier ggf. anpassen je nach Struktur deines shap_rnn.nc
-        da = self.shap_ds[var_name]
-        if 'time' in da.dims:
-            if isinstance(time_value, (list, tuple)):
-                start_date = pd.to_datetime(time_value[0])
-                end_date = pd.to_datetime(time_value[1])
-            else:
-                start_date = pd.to_datetime(time_value)
-                if self.day_stride > 1:
-                    end_date = start_date + pd.Timedelta(days=self.day_stride - 1)
-                else:
-                    end_date = start_date
-            sel_da = da.sel(time=slice(start_date, end_date))
-            agg_da = sel_da.mean(dim='time')  # z.B. Mittelwert für SHAP-Werte; passe das ggf. an
-        else:
-            agg_da = da
-
-        df_values = agg_da.to_series().to_frame(name=var_name)
-        merged = self.gdf.join(df_values, on="hru", how="inner")
-        merged = merged.dropna(subset=[var_name])
-        opts_dict = dict(
-            projection=ccrs.Mercator(),
-            tools=['hover', 'tap'],
-            color=var_name,
-            cmap='coolwarm',   # z.B. für SHAP: besser symmetrisch, passe an!
-            colorbar=True,
-            line_color='black',
-            line_width=0.1,
-            width=800,
-            height=500,
-            active_tools=['wheel_zoom']
-        )
-        # Optional: symmetrische clim für SHAP
-        vmax = max(abs(merged[var_name].max()), abs(merged[var_name].min()))
-        opts_dict['clim'] = (-vmax, vmax)
-        polys = gv.Polygons(
-            merged,
-            crs=ccrs.PlateCarree(),
-            vdims=[var_name, 'hru']
-        ).opts(**opts_dict)
-        return polys
-"""
 
     def get_date_range_slider(self):
         """
@@ -414,14 +428,15 @@ class MainView(param.Parameterized):
             )
         )
 
-        # Karte 2 und Karte 3, scrollen wird niht auf alles übertragen
-        map2 = pn.panel(self.get_map, linked_axes=False)
-        map3 = pn.panel(self.get_map, linked_axes=False)
+        # Erzeuge zweite Karte (Shap DS für ds-Variable)
+        map2 = pn.panel(self.get_map_run_off_diff, linked_axes=False, sizing_mode="stretch_width")
+        # Erzeuge dritte Karte (Shap DS mit eigener Variable-Auswahl)
+        map3 = pn.panel(self.get_map_shap_ds, linked_axes=False, sizing_mode="stretch_width")
 
         # packe Karte 2 und 3 nebeneinander
         maps_row = pn.Row(
-            pn.Column("### Karte 2", map2),
-            pn.Column("### Karte 3", map3),
+            pn.Column("### Karte 2", map2, sizing_mode="stretch_width"),
+            pn.Column("### Karte 3", map3, sizing_mode="stretch_width"),
             sizing_mode="stretch_width"
         )
 
