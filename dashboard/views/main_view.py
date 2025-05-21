@@ -78,9 +78,6 @@ class MainView(param.Parameterized):
         super().__init__(**params)
         # Variable Selector mit verfügbaren Variablen bestücken
         self.param.variable.objects = self.all_vars
-        # Spinner als Ladeanzeige
-        self.spinner = pn.indicators.LoadingSpinner(visible=False, width=50, height=50,
-                                                    css_classes=["spinner-centered"])
         # Platzhalter für den DateRangeSlider
         self.date_range_slider = None
         # Sensitivity-Modelle
@@ -95,13 +92,6 @@ class MainView(param.Parameterized):
     def date_range(self, value):
         self.start_date, self.end_date = value
 
-    @contextmanager
-    def show_spinner(self):
-        self.spinner.visible = True
-        try:
-            yield
-        finally:
-            self.spinner.visible = False
 
     @pn.depends('start_date', 'end_date', watch=True)
     def update_day_stride_from_date_range(self):
@@ -127,11 +117,9 @@ class MainView(param.Parameterized):
         Berechnet über den gesamten Datensatz (für die aktuell ausgewählte Variable und day_stride)
         den maximalen aggregierten Wert. Während der Berechnung wird ein Spinner angezeigt.
         """
-        self.spinner.visible = True
         var_name = self.variable
         if var_name is None or var_name not in self.ds:
             self.global_max = 0
-            self.spinner.visible = False
             return
         da = self.ds[var_name]
         if 'time' in da.dims:
@@ -140,7 +128,6 @@ class MainView(param.Parameterized):
             self.global_max = float(aggregated.max())
         else:
             self.global_max = float(da.max())
-        self.spinner.visible = False
 
     @pn.depends('play', watch=True)
     def toggle_play(self, event):
@@ -291,30 +278,29 @@ class MainView(param.Parameterized):
 
     @pn.depends('tap_stream.x', 'tap_stream.y', watch=False)
     def get_table(self):
-        with self.show_spinner():
-            if self.tap_stream.x is not None and self.tap_stream.y is not None:
-                # Prüfe Klick-Koordinaten
-                click_point = Point(self.tap_stream.x, self.tap_stream.y)
-                selected = self.gdf[self.gdf.geometry.contains(click_point)]
-                if len(selected) > 0:
-                    hru_clicked = selected.iloc[0]['hru']
-                    # Aggregations-Widget (Tabelle mit Basiswerten)
-                    table_widget, table_hru = create_aggregation_widget(self, hru_clicked)
-                    # Bei Markdown-Fallback direkt zurückgeben
-                    if table_hru is None:
-                        return table_widget
-                    # Aggregationstabelle mit Titel und voller Breite
-                    agg_panel = pn.Column(
-                        table_widget,
-                        sizing_mode="stretch_width"
-                    )
-                    return agg_panel
-                else:
-                    # Kein Polygon unter Klickpunkt: nur Markdown ausgeben
-                    return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.", width=300)
+        if self.tap_stream.x is not None and self.tap_stream.y is not None:
+            # Prüfe Klick-Koordinaten
+            click_point = Point(self.tap_stream.x, self.tap_stream.y)
+            selected = self.gdf[self.gdf.geometry.contains(click_point)]
+            if len(selected) > 0:
+                hru_clicked = selected.iloc[0]['hru']
+                # Aggregations-Widget (Tabelle mit Basiswerten)
+                table_widget, table_hru = create_aggregation_widget(self, hru_clicked)
+                # Bei Markdown-Fallback direkt zurückgeben
+                if table_hru is None:
+                    return table_widget
+                # Aggregationstabelle mit Titel und voller Breite
+                agg_panel = pn.Column(
+                    table_widget,
+                    sizing_mode="stretch_width"
+                )
+                return agg_panel
             else:
-                # Vor dem Klick: Hinweistext anzeigen
-                return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.", width=300)
+                # Kein Polygon unter Klickpunkt: nur Markdown ausgeben
+                return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.", width=300)
+        else:
+            # Vor dem Klick: Hinweistext anzeigen
+            return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.", width=300)
 
     def get_date_range_slider(self):
         """
@@ -394,7 +380,6 @@ class MainView(param.Parameterized):
 
         # Kombiniere die Steuerungselemente in eine horizontale Anordnung
         controls = pn.Row(
-            self.spinner,
             self.date_range_slider,
             self.play_button,
             speed_minus,
