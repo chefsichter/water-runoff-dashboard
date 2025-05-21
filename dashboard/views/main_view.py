@@ -2,6 +2,8 @@ import asyncio
 import os
 from contextlib import contextmanager
 
+import numpy as np
+
 from dashboard.widgets.play_button import create_play_button
 from dashboard.widgets.speed_widget import create_speed_widget
 from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
@@ -225,7 +227,7 @@ class MainView(param.Parameterized):
         merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
         opts = dict(
             projection=ccrs.Mercator(),
-            tools=['hover', 'tap'],
+            tools=['hover'],
             color=var_name,
             cmap='coolwarm',
             colorbar=True,
@@ -234,6 +236,8 @@ class MainView(param.Parameterized):
             width=800,
             height=500
         )
+        vmax = max(abs(merged[var_name].max()), abs(merged[var_name].min()))
+        opts['clim'] = (-vmax, vmax)
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         return polys
 
@@ -247,7 +251,7 @@ class MainView(param.Parameterized):
         merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
         opts = dict(
             projection=ccrs.Mercator(),
-            tools=['hover', 'tap'],
+            tools=['hover'],
             color=var_name,
             cmap='YlGn',
             colorbar=True,
@@ -256,8 +260,9 @@ class MainView(param.Parameterized):
             width=800,
             height=500
         )
-        vmax = max(abs(merged[var_name].max()), abs(merged[var_name].min()))
-        opts['clim'] = (-vmax, vmax)
+        values = merged[var_name].values
+        vmin, vmax = np.percentile(values, [2, 98])  # oder [5, 95]
+        opts['clim'] = (vmin, vmax)
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         return polys
 
