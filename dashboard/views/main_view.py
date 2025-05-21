@@ -2,6 +2,7 @@ import asyncio
 import os
 import textwrap
 from contextlib import contextmanager
+import xarray as xr
 
 from dashboard.config.settings import START_DATE, END_DATE, YEAR_START_DATE, \
     YEAR_END_DATE
@@ -80,6 +81,8 @@ class MainView(param.Parameterized):
         # Sensitivity-Modelle
         self.snn = StaticSensitivity()
         self.rnn = RNNSensitivity()
+        # NEU: SHAP-Daten laden
+        self.shap_ds = xr.open_dataset("../AI4GOOD/Model/Training/shap_rnn.nc")
 
     @property
     def date_range(self):
@@ -190,6 +193,7 @@ class MainView(param.Parameterized):
             agg_da = da
         return agg_da
 
+    
     @pn.depends('variable', 'day_stride', 'start_date', 'end_date', watch=False)
     async def get_map(self):
         await asyncio.sleep(0.1)
@@ -268,6 +272,60 @@ class MainView(param.Parameterized):
             else:
                 # Vor dem Klick: Hinweistext anzeigen
                 return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.", width=300)
+    
+    #Funktioniert nicht diese Funktion
+    """ 
+    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', watch=False)
+    async def get_map2(self):
+        await asyncio.sleep(0.1)
+        # Beispiel: Hier gehst du davon aus, dass die Variable auch im SHAP-File enthalten ist
+        var_name = self.variable
+        if var_name is None or var_name not in self.shap_ds:
+            return hv.Curve([]).opts(width=800, height=500)
+        time_value = self.date_range
+
+        # Aggregiere Daten ähnlich wie oben – hier ggf. anpassen je nach Struktur deines shap_rnn.nc
+        da = self.shap_ds[var_name]
+        if 'time' in da.dims:
+            if isinstance(time_value, (list, tuple)):
+                start_date = pd.to_datetime(time_value[0])
+                end_date = pd.to_datetime(time_value[1])
+            else:
+                start_date = pd.to_datetime(time_value)
+                if self.day_stride > 1:
+                    end_date = start_date + pd.Timedelta(days=self.day_stride - 1)
+                else:
+                    end_date = start_date
+            sel_da = da.sel(time=slice(start_date, end_date))
+            agg_da = sel_da.mean(dim='time')  # z.B. Mittelwert für SHAP-Werte; passe das ggf. an
+        else:
+            agg_da = da
+
+        df_values = agg_da.to_series().to_frame(name=var_name)
+        merged = self.gdf.join(df_values, on="hru", how="inner")
+        merged = merged.dropna(subset=[var_name])
+        opts_dict = dict(
+            projection=ccrs.Mercator(),
+            tools=['hover', 'tap'],
+            color=var_name,
+            cmap='coolwarm',   # z.B. für SHAP: besser symmetrisch, passe an!
+            colorbar=True,
+            line_color='black',
+            line_width=0.1,
+            width=800,
+            height=500,
+            active_tools=['wheel_zoom']
+        )
+        # Optional: symmetrische clim für SHAP
+        vmax = max(abs(merged[var_name].max()), abs(merged[var_name].min()))
+        opts_dict['clim'] = (-vmax, vmax)
+        polys = gv.Polygons(
+            merged,
+            crs=ccrs.PlateCarree(),
+            vdims=[var_name, 'hru']
+        ).opts(**opts_dict)
+        return polys
+"""
 
     def get_date_range_slider(self):
         """
@@ -345,8 +403,9 @@ class MainView(param.Parameterized):
         )
 
         # Aufbau des Hauptinhalts: Karte (Map) und Tabelle (Detailansicht)
+        map1 = pn.panel(self.get_map, linked_axes=False)
         main_area = pn.Row(
-            pn.Column(self.get_map),
+            pn.Column(map1),
             pn.Column(
                 pn.pane.Markdown("### Wichtige Daten / Einsichten"),
                 self.get_table,
@@ -355,5 +414,23 @@ class MainView(param.Parameterized):
             )
         )
 
-        # Rückgabe des kompletten Panels, das ausschließlich die dashboard‑relevanten Inhalte enthält.
-        return pn.Column(controls, main_area)
+        # Karte 2 und Karte 3, scrollen wird niht auf alles übertragen
+        map2 = pn.panel(self.get_map, linked_axes=False)
+        map3 = pn.panel(self.get_map, linked_axes=False)
+
+        # packe Karte 2 und 3 nebeneinander
+        maps_row = pn.Row(
+            pn.Column("### Karte 2", map2),
+            pn.Column("### Karte 3", map3),
+            sizing_mode="stretch_width"
+        )
+
+        # gib alles in einer Column zurück
+        return pn.Column(
+            controls,
+            main_area,
+            pn.pane.Markdown("### Zweite und dritte Karte"),
+            maps_row
+        )
+    
+        
