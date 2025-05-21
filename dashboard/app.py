@@ -22,7 +22,7 @@ def create_app():
     shapefile_path = script_dir.parent / "data" / "CHRUN" / "catchments" / 'catchments.shp'
 
     # Custom CSS laden (falls vorhanden)
-    load_custom_css(script_dir)
+    # load_custom_css(script_dir)
 
     # Daten laden
     gdf, ds = load_data(shapefile_path, netcdf_path)
