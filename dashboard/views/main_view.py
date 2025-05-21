@@ -180,13 +180,8 @@ class MainView(param.Parameterized):
     def aggregate_data(self, var_name, time_value, dataset):
         da = dataset[var_name]
         if 'time' in da.dims:
-            # Slice nach Zeitbereich
-            if isinstance(time_value, (list, tuple)):
-                start_date = pd.to_datetime(time_value[0])
-                end_date = pd.to_datetime(time_value[1])
-            else:
-                start_date = pd.to_datetime(time_value)
-                end_date = pd.to_datetime(time_value)
+            # Slice nach Zeitbereich (immer Tuple von zwei Daten)
+            start_date, end_date = map(pd.to_datetime, time_value)
             sel_da = da.sel(time=slice(start_date, end_date))
             # Dynamische Aggregation entsprechend ausgewählter Methode
             try:
