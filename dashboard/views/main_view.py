@@ -231,7 +231,6 @@ class MainView(param.Parameterized):
             colorbar=True,
             line_color='black',
             line_width=0.1,
-            active_tools=['wheel_zoom'],
             width=800,
             height=500
         )
@@ -254,7 +253,6 @@ class MainView(param.Parameterized):
             colorbar=True,
             line_color='black',
             line_width=0.1,
-            active_tools=['wheel_zoom'],
             width=800,
             height=500
         )
@@ -282,8 +280,7 @@ class MainView(param.Parameterized):
             line_color='black',
             line_width=0.1,
             width=800,
-            height=500,
-            active_tools=['wheel_zoom']
+            height=500
         )
         if self.global_max > 0:
             opts_dict['clim'] = (0, self.global_max)
@@ -313,7 +310,6 @@ class MainView(param.Parameterized):
                         return table_widget
                     # Aggregationstabelle mit Titel und voller Breite
                     agg_panel = pn.Column(
-                        pn.pane.Markdown("### Basiswerte"),
                         table_widget,
                         sizing_mode="stretch_width"
                     )
@@ -420,10 +416,9 @@ class MainView(param.Parameterized):
             sizing_mode="stretch_width",
         )
         right = pn.Column(
-            pn.pane.Markdown("### Wichtige Daten / Einsichten"),
+            pn.pane.Markdown("### Basiswerte"),
             self.get_table,
             scroll=True,
-            sizing_mode="stretch_width",
         )
         main_area = pn.Row(
             left,
@@ -463,7 +458,7 @@ class MainView(param.Parameterized):
         return pn.Column(
             controls,
             main_area,
-            pn.pane.Markdown("### Zweite und dritte Karte"),
+            pn.pane.Markdown("### Ai4Good Sentiment Analyse"),
             maps_row
         )
     
