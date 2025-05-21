@@ -4,8 +4,6 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from dashboard.widgets.play_button import create_play_button
-from dashboard.widgets.speed_widget import create_speed_widget
 from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
 
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
@@ -353,39 +351,9 @@ class MainView(param.Parameterized):
         # Erzeuge den Zeitschieberegler (DateSlider)
         self.date_range_slider = self.get_date_range_slider()
 
-        # Erzeuge den Play/Pause-Button
-        self.play_button = create_play_button()
-        self.play_button.on_click(lambda event: self.toggle_play(None))
-
-        # Erzeuge Steuerungselemente für die Spielgeschwindigkeit
-        speed_minus = pn.widgets.Button(name="-", button_type="warning", width=40)
-        speed_plus = pn.widgets.Button(name="+", button_type="success", width=40)
-        speed_label = pn.pane.Markdown(f"Speed: {self.play_speed} ms", width=100)
-        speed_input = create_speed_widget(self.play_speed)
-        speed_input.link(self, value='play_speed', bidirectional=True)
-
-        # Definition der Callbacks für Geschwindigkeitsanpassung
-        def decrease_speed(event):
-            new_speed = max(self.play_speed - 200, 50)
-            self.play_speed = new_speed
-            speed_label.object = f"Speed: {new_speed} ms"
-
-        def increase_speed(event):
-            new_speed = min(self.play_speed + 200, 2000)
-            self.play_speed = new_speed
-            speed_label.object = f"Speed: {new_speed} ms"
-
-        speed_minus.on_click(decrease_speed)
-        speed_plus.on_click(increase_speed)
-
-        # Kombiniere die Steuerungselemente in eine horizontale Anordnung
+        # Nur DateRangeSlider in der Hauptansicht; Play/Speed Controls im Sidebar
         controls = pn.Row(
             self.date_range_slider,
-            self.play_button,
-            speed_minus,
-            speed_label,
-            speed_plus,
-            speed_input,
             sizing_mode="stretch_width"
         )
 

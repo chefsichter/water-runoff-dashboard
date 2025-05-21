@@ -70,7 +70,13 @@ def create_app():
      stride_widget,
      var_selector,
      year_range_slider,
-     agg_selector) = create_sidebar_widgets(
+     agg_selector,
+     play_button,
+     speed_minus,
+     speed_input,
+     speed_plus
+     ) = create_sidebar_widgets(
+        main_view,
         time_min,
         time_max,
         YEAR_START_DATE,
@@ -99,7 +105,11 @@ def create_app():
         start_date_picker,
         end_date_picker,
         stride_widget,
-        agg_selector
+        agg_selector,
+        play_button,
+        speed_minus,
+        speed_input,
+        speed_plus
     )
 
     # Füge die einzelnen Teile zusammen

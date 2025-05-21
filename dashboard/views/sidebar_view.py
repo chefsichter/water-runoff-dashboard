@@ -1,5 +1,7 @@
 # sidebar.py
 import panel as pn
+from dashboard.widgets.play_button import create_play_button
+from dashboard.widgets.speed_widget import create_speed_widget
 
 from dashboard.config.settings import INIT_VAR, INIT_DAY_STRIDE, START_DATE, END_DATE
 from dashboard.widgets.agg_selector import create_agg_selector
@@ -10,7 +12,7 @@ from dashboard.widgets.var_selector import create_variable_selector
 from dashboard.widgets.year_range_slider import create_year_range_slider
 
 
-def create_sidebar_widgets(time_min, time_max, year_start_date, year_end_date, start_date, end_date, all_vars,
+def create_sidebar_widgets(main_view, time_min, time_max, year_start_date, year_end_date, start_date, end_date, all_vars,
                            var_metadata):
     # Variablenselektion und Info-Button
     var_selector = create_variable_selector(all_vars, var_metadata, INIT_VAR)
@@ -22,10 +24,41 @@ def create_sidebar_widgets(time_min, time_max, year_start_date, year_end_date, s
     start_date_picker = create_date_picker("📅 Startdatum", start_date)
     end_date_picker = create_date_picker("⌛ Enddatum", end_date)
     agg_selector = create_agg_selector()
-    return end_date_picker, info_button, start_date_picker, stride_widget, var_selector, year_range_slider, agg_selector
+    # Play/Pause and Speed Controls
+    play_button = create_play_button()
+    # Register play button in main_view for toggle_play
+    main_view.play_button = play_button
+    speed_minus = pn.widgets.Button(name='-', button_type='warning', width=40)
+    speed_plus = pn.widgets.Button(name='+', button_type='success', width=40)
+    speed_input = create_speed_widget(300)
+    return (
+        end_date_picker,
+        info_button,
+        start_date_picker,
+        stride_widget,
+        var_selector,
+        year_range_slider,
+        agg_selector,
+        play_button,
+        speed_minus,
+        speed_input,
+        speed_plus
+    )
 
 
-def create_sidebar(var_selector, info_button, year_range_slider, start_date_picker, end_date_picker, stride_widget, agg_selector):
+def create_sidebar(
+    var_selector,
+    info_button,
+    year_range_slider,
+    start_date_picker,
+    end_date_picker,
+    stride_widget,
+    agg_selector,
+    play_button,
+    speed_minus,
+    speed_input,
+    speed_plus
+):
     # Kombiniere Variablenselektion und Info-Button in einer Zeile
     var_info_btn_row = pn.Row(
         pn.Spacer(width=10),
@@ -65,9 +98,23 @@ def create_sidebar(var_selector, info_button, year_range_slider, start_date_pick
     )
 
     # Gesamtes Sidebar‑Layout
+    # Play/Pause- und Speed-Steuerung
+    player_section = pn.Column(
+        pn.pane.Markdown("### ▶️ Play Einstellungen", margin=(15, 10, 0, 10)),
+        pn.Row(
+            play_button,
+            speed_minus,
+            speed_input,
+            speed_plus,
+            sizing_mode="stretch_width"
+        ),
+        sizing_mode="stretch_width"
+    )
+    # Gesamtes Sidebar-Layout
     sidebar = pn.Column(
         map_section,
         aggregation_section,
+        player_section,
         sizing_mode="stretch_width"
     )
     return sidebar
