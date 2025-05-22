@@ -3,7 +3,7 @@ import os
 from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 
-from dashboard.config.settings import MIN_DAY_STRIDE, MAX_DAY_STRIDE
+from dashboard.config.settings import MIN_DAY_STRIDE, MAX_DAY_STRIDE, INIT_SPEED_MS, INIT_AGG_METHOD
 from dashboard.views.main_multiprocessing import init_global_vars, compute_map_df, compute_runoff_df, compute_shap_df
 from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
 
@@ -37,7 +37,7 @@ class MainView(param.Parameterized):
     play = param.Action(lambda x: x.param.trigger('play'), label='Play')
     playing = False
     # Spielgeschwindigkeit in Millisekunden (Standard: 300 ms)
-    play_speed = param.Number(default=300, bounds=(50, 10000))
+    play_speed = param.Number(default=INIT_SPEED_MS, bounds=(50, 100000))
 
     # Zeitbereich (für Slider)
     time_min = param.CalendarDate(default=None)
@@ -45,7 +45,7 @@ class MainView(param.Parameterized):
 
     # Aggregationsfunktion für Zeitdimension (sum, mean, max, min)
     agg_method = param.ObjectSelector(
-        default='sum',
+        default=INIT_AGG_METHOD,
         objects=['sum', 'mean', 'max', 'min'],
         label='Aggregation'
     )

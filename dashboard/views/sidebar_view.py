@@ -4,7 +4,7 @@ from dashboard.widgets.play_button import create_play_button
 from dashboard.widgets.speed_widget import create_speed_input_widget, create_speed_plus_widget, \
     create_speed_minus_widget
 
-from dashboard.config.settings import INIT_VAR, INIT_DAY_STRIDE, MIN_DAY_STRIDE, MAX_DAY_STRIDE
+from dashboard.config.settings import INIT_VAR, INIT_DAY_STRIDE, MIN_DAY_STRIDE, MAX_DAY_STRIDE, INIT_SPEED_MS
 from dashboard.widgets.agg_selector import create_agg_selector
 from dashboard.widgets.date_picker import create_date_picker
 from dashboard.widgets.info_button import create_info_button
@@ -33,7 +33,7 @@ def create_sidebar_widgets(time_min, time_max, year_start_date, year_end_date, s
     play_button = create_play_button()
     speed_minus = create_speed_minus_widget()
     speed_plus = create_speed_plus_widget()
-    speed_input = create_speed_input_widget(300)
+    speed_input = create_speed_input_widget(INIT_SPEED_MS)
     return (
         end_date_picker,
         info_button,
