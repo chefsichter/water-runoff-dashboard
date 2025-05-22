@@ -126,5 +126,5 @@ def create_app():
 
 
 if __name__ == "__main__":
-    app = create_app()
-    pn.serve(app, title="Water Runoff Dashboard", show=True, port=1961)
+    # Serve the app via a factory to ensure a fresh Document per session
+    pn.serve(create_app, title="Water Runoff Dashboard", show=True, port=1961)
