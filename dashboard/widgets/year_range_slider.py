@@ -1,5 +1,6 @@
 import pandas as pd
 import panel as pn
+import param
 
 from dashboard.config.settings import YEAR_START_DATE, YEAR_END_DATE
 
@@ -48,13 +49,14 @@ def set_map_bounds(event, main_view, adjust_start_for_stride=True):
             # Ohne Anpassung: new_end einfach auf new_time_max setzen
             new_end = new_time_max
 
-    # Update der MainView-Parameter in einem Schritt (atomar)
-    main_view.param.update(
-        time_min=new_time_min,
-        time_max=new_time_max,
-        start_date=new_start,
-        end_date=new_end
-    )
+    # Atomically update MainView parameters to avoid intermediate invalid states
+    with param.parameterized.batch_call_watchers(main_view):
+        main_view.param.update(
+            time_min=new_time_min,
+            time_max=new_time_max,
+            start_date=new_start,
+            end_date=new_end
+        )
 
     # Aktualisiere den DateRangeSlider, falls vorhanden, mit dem berechneten Intervall.
     if main_view.date_range_slider is not None:

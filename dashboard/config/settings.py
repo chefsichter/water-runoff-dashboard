@@ -8,6 +8,8 @@ INIT_VAR = "P"
 START_DATE = datetime.date(2020, 1, 1)
 END_DATE = datetime.date(2020, 1, 1)
 INIT_DAY_STRIDE = (END_DATE - START_DATE).days + 1
+MIN_DAY_STRIDE = 1
+MAX_DAY_STRIDE = 25000
 
 # Year Range Widget
 YEAR_START_DATE = datetime.date(2020, 1, 1)

@@ -4,7 +4,7 @@ from dashboard.widgets.play_button import create_play_button
 from dashboard.widgets.speed_widget import create_speed_input_widget, create_speed_plus_widget, \
     create_speed_minus_widget
 
-from dashboard.config.settings import INIT_VAR, INIT_DAY_STRIDE, START_DATE, END_DATE
+from dashboard.config.settings import INIT_VAR, INIT_DAY_STRIDE, MIN_DAY_STRIDE, MAX_DAY_STRIDE
 from dashboard.widgets.agg_selector import create_agg_selector
 from dashboard.widgets.date_picker import create_date_picker
 from dashboard.widgets.info_button import create_info_button
@@ -21,7 +21,7 @@ def create_sidebar_widgets(time_min, time_max, year_start_date, year_end_date, s
     # Jahresbereichs-Slider (Benötigt den vollständigen Zeitraum)
     year_range_slider = create_year_range_slider(time_min.year, time_max.year, year_start_date.year, year_end_date.year)
     # Widget für die Anzahl der Tage (Stride) und DatePicker
-    stride_widget = create_stride_widget(INIT_DAY_STRIDE)
+    stride_widget = create_stride_widget(INIT_DAY_STRIDE, MIN_DAY_STRIDE, MAX_DAY_STRIDE)
     start_date_picker = create_date_picker("📅 Start date", start_date)
     end_date_picker = create_date_picker("⌛ End date", end_date)
     agg_selector = create_agg_selector()

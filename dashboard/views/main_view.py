@@ -3,6 +3,7 @@ import os
 from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 
+from dashboard.config.settings import MIN_DAY_STRIDE, MAX_DAY_STRIDE
 from dashboard.views.main_multiprocessing import init_global_vars, compute_map_df, compute_runoff_df, compute_shap_df
 from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
 
@@ -27,7 +28,7 @@ class MainView(param.Parameterized):
     # Alle Variablen sollen in der Combobox auswählbar sein.
     variable = param.ObjectSelector(default=None, objects=[])
     # Stride (Tage) über ein Inputfeld (IntInput) eingeben.
-    day_stride = param.Integer(default=None, bounds=(1, 25000))
+    day_stride = param.Integer(default=None, bounds=(MIN_DAY_STRIDE, MAX_DAY_STRIDE))
     # Wir verwenden nur noch einen Zeitbereich, nicht mehr ein einzelnes Datum:
     start_date = param.CalendarDate(default=None)
     end_date = param.CalendarDate(default=None)
@@ -321,15 +322,16 @@ class MainView(param.Parameterized):
         def update_dates(event):
             new_start, new_end = event.new
             # Konvertiere zu date, falls nötig
-            self.start_date = new_start.date() if hasattr(new_start, "date") else new_start
-            self.end_date = new_end.date() if hasattr(new_end, "date") else new_end
+            start_date = new_start.date() if hasattr(new_start, "date") else new_start
+            end_date = new_end.date() if hasattr(new_end, "date") else new_end
+            self.date_range = (start_date, end_date)
 
         date_range_slider.param.watch(update_dates, 'value')
 
         # Callback, um den Slider zu aktualisieren, wenn start_date oder end_date sich ändern.
         def update_slider(*events):
-            # Verhindert rekursive Updates, falls nötig.
-            date_range_slider.value = (pd.Timestamp(self.start_date), pd.Timestamp(self.end_date))
+            if date_range_slider.value != (pd.Timestamp(self.start_date), pd.Timestamp(self.end_date)):
+                date_range_slider.value = (pd.Timestamp(self.start_date), pd.Timestamp(self.end_date))
 
         self.param.watch(lambda *args, **kwargs: update_slider(), ['start_date', 'end_date'])
 

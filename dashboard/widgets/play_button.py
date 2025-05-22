@@ -1,5 +1,5 @@
 import panel as pn
-CSS_TOP_MARGIN = 34
+CSS_TOP_MARGIN = 33
 
 def create_play_button():
     btn = pn.widgets.Button(name="Play", button_type="primary", width=60)
