@@ -1,5 +1,8 @@
 from pathlib import Path
 import panel as pn
+
+from dashboard.widgets.speed_widget import decrease_speed, increase_speed
+
 pn.extension('tabulator')
 import holoviews as hv
 hv.extension("bokeh")
@@ -44,7 +47,6 @@ def create_app():
     # Bootstrap-Template erzeugen
     bootstrap = pn.template.BootstrapTemplate(title="📊💧 Water Runoff Dashboard")
 
-    # MainView erzeugen
     # MainView erzeugen (inkl. Variable Metadata)
     main_view = MainView(
         var_metadata=var_metadata,
@@ -76,7 +78,6 @@ def create_app():
      speed_input,
      speed_plus
      ) = create_sidebar_widgets(
-        main_view,
         time_min,
         time_max,
         YEAR_START_DATE,
@@ -94,8 +95,12 @@ def create_app():
     start_date_picker.link(main_view, value='start_date', bidirectional=True)
     end_date_picker.link(main_view, value='end_date', bidirectional=True)
     stride_widget.link(main_view, value='day_stride', bidirectional=True)
-    # Link Aggregationsfunktion an MainView
     agg_selector.link(main_view, value='agg_method', bidirectional=True)
+    main_view.play_button = play_button
+    play_button.on_click(lambda event: main_view.param.trigger('play'))
+    speed_minus.on_click(lambda event: decrease_speed(speed_input, main_view.param.play_speed.bounds))
+    speed_plus.on_click(lambda event: increase_speed(speed_input, main_view.param.play_speed.bounds))
+    speed_input.link(main_view, value='play_speed', bidirectional=True)
 
     # Sidebar-Layout erstellen, indem die bereits erstellten Widgets übergeben werden
     sidebar = create_sidebar(

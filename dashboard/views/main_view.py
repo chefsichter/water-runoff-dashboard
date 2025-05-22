@@ -1,11 +1,11 @@
 import asyncio
 import os
-from contextlib import contextmanager
 
 import numpy as np
 
 from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
 
+# Link Aggregationsfunktion an MainView
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
 os.environ["PROJ_LIB"] = "/home/chefsichter/miniconda3/envs/ai4good/share/proj"
 
@@ -35,7 +35,7 @@ class MainView(param.Parameterized):
     play = param.Action(lambda x: x.param.trigger('play'), label='Play')
     playing = False
     # Spielgeschwindigkeit in Millisekunden (Standard: 300 ms)
-    play_speed = param.Number(default=300, bounds=(50, 2000))
+    play_speed = param.Number(default=300, bounds=(50, 10000))
     # Global max für den Farbbereich (wird nach Berechnung gesetzt)
     global_max = param.Number(default=0)
 
@@ -88,7 +88,8 @@ class MainView(param.Parameterized):
 
     @date_range.setter
     def date_range(self, value):
-        self.start_date, self.end_date = value
+        with param.parameterized.batch_call_watchers(self):
+            self.start_date, self.end_date = value
 
 
     @pn.depends('start_date', 'end_date', watch=True)
@@ -128,34 +129,34 @@ class MainView(param.Parameterized):
             self.global_max = float(da.max())
 
     @pn.depends('play', watch=True)
-    def toggle_play(self, event):
+    def toggle_play(self):
         self.playing = not self.playing
         if self.playing:
             self.play_button.name = "Pause"
-            self._play_loop()
+            asyncio.create_task(self._play_loop())
         else:
             self.play_button.name = "Play"
 
-    def _play_loop(self):
-        if not self.playing:
-            return
-        if self.day_stride > 1:
-            current_start = pd.to_datetime(self.date_range[0])
-            next_start = current_start + pd.Timedelta(days=self.day_stride)
-            if next_start.date() > pd.to_datetime(self.time_max).date():
-                self.playing = False
-                return
-            new_range = (next_start.date(), (next_start + pd.Timedelta(days=self.day_stride - 1)).date())
-            self.date_range = new_range
-        else:
-            current_date = pd.to_datetime(self.get_start_date())
-            next_date = current_date + pd.Timedelta(days=1)
-            if next_date.date() > pd.to_datetime(self.time_max).date():
-                self.playing = False
-                return
-            self.date_range = (next_date.date(), next_date.date())
-        # Verwende die aktuell eingestellte play_speed (in ms)
-        curdoc().add_periodic_callback(self._play_loop, int(self.play_speed))
+    async def _play_loop(self):
+        # Show loading spinner
+        pn.state._busy_counter += 1
+        try:
+            while self.playing:
+                current_start = pd.to_datetime(self.get_start_date())
+                next_start = current_start + pd.Timedelta(days=self.day_stride)
+
+                if next_start.date() > pd.to_datetime(self.time_max).date():
+                    self.playing = False
+                    self.play_button.name = "Play"
+                    break
+
+                self.date_range = (next_start.date(), (next_start + pd.Timedelta(days=self.day_stride - 1)).date())
+
+                # Warten, bis die UI Zeit hatte, zu reagieren
+                await asyncio.sleep(self.play_speed / 1000.0)
+        finally:
+            # Decrement busy counter to hide spinner
+            pn.state._busy_counter -= 1
 
     def _get_cmap_for_var(self, var_name):
         if var_name in self.var_cmaps:
@@ -411,8 +412,6 @@ class MainView(param.Parameterized):
         return pn.Column(
             controls,
             main_area,
-            pn.pane.Markdown("### Ai4Good Sentiment Analyse"),
+            pn.pane.Markdown("### Ai4Good Sensitivitätsanalyse"),
             maps_row
         )
-    
-        
