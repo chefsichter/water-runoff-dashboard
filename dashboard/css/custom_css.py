@@ -19,3 +19,10 @@ def load_custom_css():
         padding: 0px;  /* Padding hier auf 0, weil du es im .var-info-modal selbst machst */
     }
     """)
+    # DatePicker-Popups: allow calendar to overflow and appear on top
+    pn.config.raw_css.append("""
+    /* Allow overflow of calendar in sidebar and content */
+    #sidebar {
+        overflow: visible !important;
+    }
+    """)
