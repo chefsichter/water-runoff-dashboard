@@ -412,7 +412,7 @@ class MainView(param.Parameterized):
         # gib alles in einer Column zurück
         return pn.Column(
             controls,
-            main_area,
             pn.pane.Markdown("### Ai4Good Sensitivity Analysis"),
-            maps_row
+            maps_row,
+            main_area
         )
