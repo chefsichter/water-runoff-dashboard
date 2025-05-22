@@ -202,7 +202,9 @@ class MainView(param.Parameterized):
                     line_color='black',
                     line_width=0.1,
                     width=800,
-                    height=500
+                    height=500,
+                    xformatter='%.2e',
+                    yformatter='%.2e'
                 )
                 values = merged[var_name].values
                 vmax = max(abs(values.max()), abs(values.min()))
@@ -238,7 +240,9 @@ class MainView(param.Parameterized):
                 line_color='black',
                 line_width=0.1,
                 width=800,
-                height=500
+                height=500,
+                xformatter='%.2e',
+                yformatter='%.2e'
             )
             values = merged[var_name].values
             vmin, vmax = np.percentile(values, [2, 98])
@@ -277,7 +281,9 @@ class MainView(param.Parameterized):
                 line_color='black',
                 line_width=0.1,
                 width=800,
-                height=500
+                height=500,
+                xformatter='%.2e',
+                yformatter='%.2e'
             )
             result = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         self._cache_map[key] = result
