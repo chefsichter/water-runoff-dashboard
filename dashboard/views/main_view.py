@@ -121,7 +121,6 @@ class MainView(param.Parameterized):
     def get_start_date(self):
         return self.date_range[0]
 
-
     @pn.depends('play', watch=True)
     def toggle_play(self):
         self.playing = not self.playing

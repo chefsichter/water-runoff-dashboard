@@ -1,12 +1,13 @@
 from pathlib import Path
 import panel as pn
-
-from dashboard.widgets.speed_widget import decrease_speed, increase_speed
+from functools import partial
 
 pn.extension('tabulator')
 import holoviews as hv
 hv.extension("bokeh")
 
+from dashboard.widgets.speed_widget import decrease_speed, increase_speed
+from dashboard.widgets.date_picker import on_start_change, on_end_change
 from dashboard.config.settings import END_DATE, START_DATE, YEAR_START_DATE, YEAR_END_DATE, INIT_DAY_STRIDE
 from dashboard.views.main_view import MainView
 from dashboard.views.modal_view import show_var_infos
@@ -80,6 +81,16 @@ def create_app():
     var_selector.link(main_view, value='variable', bidirectional=True)
     info_button.on_click(lambda event: show_var_infos(bootstrap, var_metadata, var_selector.value))
     year_range_slider.param.watch(lambda event: set_map_bounds(event, main_view), 'value')
+    # Callbacks für gültige Datumsauswahl müssen VOR dem Linken registriert werden
+    _on_start_change = partial(on_start_change,
+                               start_date_picker=start_date_picker,
+                               end_date_picker=end_date_picker)
+    start_date_picker.param.watch(_on_start_change, 'value')
+    _on_end_change = partial(on_end_change,
+                             start_date_picker=start_date_picker,
+                             end_date_picker=end_date_picker)
+    end_date_picker.param.watch(_on_end_change, 'value')
+    # Link date pickers to main view
     start_date_picker.link(main_view, value='start_date', bidirectional=True)
     end_date_picker.link(main_view, value='end_date', bidirectional=True)
     stride_widget.link(main_view, value='day_stride', bidirectional=True)

@@ -22,8 +22,12 @@ def create_sidebar_widgets(time_min, time_max, year_start_date, year_end_date, s
     year_range_slider = create_year_range_slider(time_min.year, time_max.year, year_start_date.year, year_end_date.year)
     # Widget für die Anzahl der Tage (Stride) und DatePicker
     stride_widget = create_stride_widget(INIT_DAY_STRIDE, MIN_DAY_STRIDE, MAX_DAY_STRIDE)
+    # Date pickers for start and end dates
     start_date_picker = create_date_picker("📅 Start date", start_date)
-    end_date_picker = create_date_picker("⌛ End date", end_date)
+    end_date_picker   = create_date_picker("⌛ End date",   end_date)
+    start_date_picker.end = end_date
+    end_date_picker.start = start_date
+    # aggregation selector
     agg_selector = create_agg_selector()
     # Play/Pause and Speed Controls
     play_button = create_play_button()
