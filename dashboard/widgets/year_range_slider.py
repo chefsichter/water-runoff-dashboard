@@ -6,7 +6,7 @@ from dashboard.config.settings import YEAR_START_DATE, YEAR_END_DATE
 
 def create_year_range_slider(min_year, max_year, start_year, end_year):
     return pn.widgets.IntRangeSlider(
-        name="🧱 Jahresbereich",
+        name="🧱 Year Range",
         start=min_year,
         end=max_year,
         value=(start_year, end_year),

@@ -22,8 +22,8 @@ def create_sidebar_widgets(time_min, time_max, year_start_date, year_end_date, s
     year_range_slider = create_year_range_slider(time_min.year, time_max.year, year_start_date.year, year_end_date.year)
     # Widget für die Anzahl der Tage (Stride) und DatePicker
     stride_widget = create_stride_widget(INIT_DAY_STRIDE)
-    start_date_picker = create_date_picker("📅 Startdatum", start_date)
-    end_date_picker = create_date_picker("⌛ Enddatum", end_date)
+    start_date_picker = create_date_picker("📅 Start date", start_date)
+    end_date_picker = create_date_picker("⌛ End date", end_date)
     agg_selector = create_agg_selector()
     # Play/Pause and Speed Controls
     play_button = create_play_button()
@@ -68,7 +68,7 @@ def create_sidebar(
         margin = (0,0,0,0)
     )
     map_section = pn.Column(
-        pn.pane.Markdown("### 🧭 Karteneinstellungen",
+        pn.pane.Markdown("### 🧭 Map Settings",
                          margin=(0, 10)),
         var_info_btn_row,
         year_range_slider)
@@ -88,7 +88,7 @@ def create_sidebar(
     # Abschnitt "Karteneinstellungen"
     # Abschnitt Aggregationseinstellungen inklusive Funktionenauswahl
     aggregation_section = pn.Column(
-        pn.pane.Markdown("### ∑ Aggregationseinstellungen", margin=(15, 10, 0, 10)),
+        pn.pane.Markdown("### ∑ Aggregation Settings", margin=(15, 10, 0, 10)),
         aggregation_row,
         pn.Row(
             agg_selector,
@@ -99,7 +99,7 @@ def create_sidebar(
     # Gesamtes Sidebar‑Layout
     # Play/Pause- und Speed-Steuerung
     player_section = pn.Column(
-        pn.pane.Markdown("### ▶️ Play Einstellungen", margin=(15, 10, 0, 10)),
+        pn.pane.Markdown("### ▶️ Play Settings", margin=(15, 10, 0, 10)),
         pn.Row(
             play_button,
             speed_minus,

@@ -310,11 +310,11 @@ class MainView(param.Parameterized):
                 )
                 return agg_panel
             else:
-                # Kein Polygon unter Klickpunkt: nur Markdown ausgeben
-                return pn.pane.Markdown("Kein Polygon unter Klickpunkt gefunden.", width=300)
+                # No polygon under click point: show Markdown message
+                return pn.pane.Markdown("No polygon found at the click location.", width=300)
         else:
-            # Vor dem Klick: Hinweistext anzeigen
-            return pn.pane.Markdown("Klicke auf ein Polygon, um Details zu sehen.", width=300)
+            # Before clicking: show prompt
+            return pn.pane.Markdown("Click on a polygon to see details.", width=300)
 
     def get_date_range_slider(self):
         """
@@ -324,7 +324,7 @@ class MainView(param.Parameterized):
         """
         # Konvertiere initial den date_range-Wert in Timestamps, da der DateRangeSlider Timestamps verwendet.
         date_range_slider = pn.widgets.DateRangeSlider(
-            name=f"🕒 Zeitraum",
+            name="🕒 Time Range",
             start=pd.Timestamp(self.time_min),
             end=pd.Timestamp(self.time_max),
             value=(pd.Timestamp(self.start_date), pd.Timestamp(self.end_date)),
@@ -357,11 +357,11 @@ class MainView(param.Parameterized):
 
     @pn.depends('variable')
     def get_map1_title(self):
-        return pn.panel(f"### Aggregierte Werte für '{self._get_long_name(self.variable)}'")
+        return pn.panel(f"### Aggregated values for '{self._get_long_name(self.variable)}'")
 
     @pn.depends('variable')
     def get_map3_title(self):
-        return pn.panel(f"### Aggregierte SHAP-Werte für '{self._get_long_name(self.variable)}'")
+        return pn.panel(f"### Aggregated SHAP values for '{self._get_long_name(self.variable)}'")
 
     def panel_view(self):
         # Erzeuge den Zeitschieberegler (DateSlider)
@@ -385,7 +385,7 @@ class MainView(param.Parameterized):
             sizing_mode="stretch_width",
         )
         right = pn.Column(
-            pn.pane.Markdown("### Aggregierte Werte (per HRU)"),
+            pn.pane.Markdown("### 'HRU' aggregated values"),
             self.get_table,
             scroll=True,
         )
@@ -411,7 +411,7 @@ class MainView(param.Parameterized):
         # Packe Karte 2 und 3 nebeneinander mit passenden Titeln und korrektem Seitenverhältnis
         maps_row = pn.Row(
             pn.Column(
-                pn.pane.Markdown("### Aggregierte absolute Differenz zwischen den Runoff-Modellen ('Y')"),
+                pn.pane.Markdown("### Aggregated absolute difference between the runoff models ('Y')"),
                 map2,
                 sizing_mode="stretch_width"
             ),
@@ -427,6 +427,6 @@ class MainView(param.Parameterized):
         return pn.Column(
             controls,
             main_area,
-            pn.pane.Markdown("### Ai4Good Sensitivitätsanalyse"),
+            pn.pane.Markdown("### Ai4Good Sensitivity Analysis"),
             maps_row
         )

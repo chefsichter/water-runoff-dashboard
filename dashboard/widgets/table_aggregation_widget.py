@@ -8,7 +8,7 @@ def create_aggregation_widget(main_view, hru_clicked):
     """
     var_name = main_view.variable
     if var_name is None:
-        return pn.pane.Markdown("Keine Variable ausgewählt.", width=300), None
+        return pn.pane.Markdown("No variable selected.", width=300), None
     # Vorbereitung
     time_value = main_view.date_range
     row_data = {}
@@ -42,7 +42,7 @@ def create_aggregation_widget(main_view, hru_clicked):
         except Exception:
             row_data[stat] = None
     # DataFrame zusammenstellen
-    table_df = pd.DataFrame.from_dict(row_data, orient='index', columns=['Wert'])
+    table_df = pd.DataFrame.from_dict(row_data, orient='index', columns=['Value'])
     table_df.index.name = 'Variable'
     # Verwende lange Namen für Anzeige
     long_names = [
@@ -52,7 +52,7 @@ def create_aggregation_widget(main_view, hru_clicked):
     table_df.index = long_names
     # Reset Index für Tabulator
     df = table_df.reset_index()
-    df.columns = ['Variable', 'Wert']
+    df.columns = ['Variable', 'Value']
     # Gruppenspalte für Sortierung (P, T und ggf. aktuelles dynamisches Feature zuerst)
     dynamic_long = [main_view.var_metadata.get(k, {}).get('long_name', k) for k in dynamic_keys]
     df['Gruppe'] = df['Variable'].apply(lambda v: 'Dynamisch' if v in dynamic_long else 'Statisch')
