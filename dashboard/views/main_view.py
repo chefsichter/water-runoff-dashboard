@@ -191,11 +191,11 @@ class MainView(param.Parameterized):
         mapping = {'P': 'sum_P', 'T': 'sum_T'}
         return mapping.get(var_name)
     
-    @pn.depends('variable', 'start_date', 'end_date', watch=False)
+    @pn.depends('variable', 'start_date', 'end_date', 'agg_method', watch=False)
     def get_map_shap_ds(self):
         """Zeigt SHAP-Werte für die aktuell gewählte Variable aus ds (mit Cache)."""
         var_name = self.variable
-        key = (var_name, self.start_date, self.end_date)
+        key = (var_name, self.start_date, self.end_date, self.agg_method)
         if key in self._cache_map_shap:
             return self._cache_map_shap[key]
         shap_var = self._map_shap_var(var_name)
@@ -227,10 +227,10 @@ class MainView(param.Parameterized):
         self._cache_map_shap[key] = polys
         return polys
 
-    @pn.depends('start_date', 'end_date', watch=False)
+    @pn.depends('start_date', 'end_date', 'agg_method', watch=False)
     def get_map_run_off_diff(self):
         """Absolute Differenz der Runoff-Modelle ('Y') mit Cache."""
-        key = (self.start_date, self.end_date)
+        key = (self.start_date, self.end_date, self.agg_method)
         if key in self._cache_map_diff:
             return self._cache_map_diff[key]
         var_name = 'Y'
@@ -296,7 +296,7 @@ class MainView(param.Parameterized):
         self.tap_stream.source = polys
         return polys
 
-    @pn.depends('tap_stream.x', 'tap_stream.y', watch=False)
+    @pn.depends('tap_stream.x', 'tap_stream.y', 'agg_method', watch=False)
     def get_table(self):
         if self.tap_stream.x is not None and self.tap_stream.y is not None:
             # Prüfe Klick-Koordinaten
