@@ -1,8 +1,9 @@
 import asyncio
 import os
-
+from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 
+from dashboard.views.main_multiprocessing import init_global_vars, compute_map_df, compute_runoff_df, compute_shap_df
 from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
 
 # Link Aggregationsfunktion an MainView
@@ -85,6 +86,13 @@ class MainView(param.Parameterized):
         self._cache_map = {}
         self._cache_map_shap = {}
         self._cache_map_diff = {}
+        # Executor for asynchronous map building across processes (bypass GIL)
+        # Use initializer to set up global datasets in worker processes
+        self._executor = ProcessPoolExecutor(
+            max_workers=os.cpu_count(),
+            initializer=init_global_vars,
+            initargs=(self.ds, self.shap_ds)
+        )
 
     @property
     def date_range(self):
@@ -94,7 +102,6 @@ class MainView(param.Parameterized):
     def date_range(self, value):
         with param.parameterized.batch_call_watchers(self):
             self.start_date, self.end_date = value
-
 
     @pn.depends('start_date', 'end_date', watch=True)
     def update_day_stride_from_date_range(self):
@@ -115,7 +122,7 @@ class MainView(param.Parameterized):
     def get_start_date(self):
         return self.date_range[0]
 
-    def compute_global_max(self): # todo: remove
+    def compute_global_max(self):  # todo: remove
         """
         Berechnet über den gesamten Datensatz (für die aktuell ausgewählte Variable und day_stride)
         den maximalen aggregierten Wert. Während der Berechnung wird ein Spinner angezeigt.
@@ -181,97 +188,103 @@ class MainView(param.Parameterized):
         else:
             agg_da = da
         return agg_da
-    
-    # Hilfsfunktion: Mappe ds-Variablennamen auf shap_ds-Variablen
-    def _map_shap_var(self, var_name):
-        # Direkter Name
-        if var_name in self.shap_ds.data_vars:
-            return var_name
-        # Spezielle Zuordnungen
-        mapping = {'P': 'sum_P', 'T': 'sum_T'}
-        return mapping.get(var_name)
-    
+
     @pn.depends('variable', 'start_date', 'end_date', 'agg_method', watch=False)
-    def get_map_shap_ds(self):
-        """Zeigt SHAP-Werte für die aktuell gewählte Variable aus ds (mit Cache)."""
+    async def get_map_shap_ds(self):
+        """Async SHAP-Karte für die aktuell gewählte Variable."""
         var_name = self.variable
         key = (var_name, self.start_date, self.end_date, self.agg_method)
         if key in self._cache_map_shap:
             return self._cache_map_shap[key]
-        shap_var = self._map_shap_var(var_name)
-        if shap_var is None or shap_var not in self.shap_ds.data_vars:
-            pane = pn.pane.Markdown(f"Keine SHAP-Werte für Variable {var_name} vorhanden.", width=300)
-            self._cache_map_shap[key] = pane
-            return pane
-        agg_da = self.aggregate_data(shap_var, self.date_range, self.shap_ds)
-        if agg_da is None:
-            pane = pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
-            self._cache_map_shap[key] = pane
-            return pane
-        df_values = agg_da.to_series().to_frame(name=var_name)
-        merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
-        opts = dict(
-            projection=ccrs.Mercator(),
-            tools=['hover'],
-            color=var_name,
-            cmap='coolwarm',
-            colorbar=True,
-            line_color='black',
-            line_width=0.1,
-            width=800,
-            height=500
+        loop = asyncio.get_running_loop()
+        df_values = await loop.run_in_executor(
+            self._executor,
+            compute_shap_df,
+            var_name,
+            self.date_range,
+            self.agg_method
         )
-        vmax = max(abs(merged[var_name].max()), abs(merged[var_name].min()))
-        opts['clim'] = (-vmax, vmax)
-        polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
-        self._cache_map_shap[key] = polys
-        return polys
+        if df_values is None or df_values.empty:
+            result = pn.pane.Markdown(f"Keine SHAP-Werte für Variable {var_name} vorhanden.", width=300)
+        else:
+            merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
+            if merged.empty:
+                result = pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
+            else:
+                opts = dict(
+                    projection=ccrs.Mercator(),
+                    tools=['hover'],
+                    color=var_name,
+                    cmap='coolwarm',
+                    colorbar=True,
+                    line_color='black',
+                    line_width=0.1,
+                    width=800,
+                    height=500
+                )
+                values = merged[var_name].values
+                vmax = max(abs(values.max()), abs(values.min()))
+                opts['clim'] = (-vmax, vmax)
+                result = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
+        self._cache_map_shap[key] = result
+        return result
 
     @pn.depends('start_date', 'end_date', 'agg_method', watch=False)
-    def get_map_run_off_diff(self):
-        """Absolute Differenz der Runoff-Modelle ('Y') mit Cache."""
+    async def get_map_run_off_diff(self):
+        """Async Runoff-Differenz-Karte."""
         key = (self.start_date, self.end_date, self.agg_method)
         if key in self._cache_map_diff:
             return self._cache_map_diff[key]
         var_name = 'Y'
-        agg_da = self.aggregate_data(var_name, self.date_range, self.shap_ds)
-        if agg_da is None:
-            pane = pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
-            self._cache_map_diff[key] = pane
-            return pane
-        df_values = agg_da.to_series().to_frame(name=var_name)
-        merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
-        opts = dict(
-            projection=ccrs.Mercator(),
-            tools=['hover'],
-            color=var_name,
-            cmap='YlGn',
-            colorbar=True,
-            line_color='black',
-            line_width=0.1,
-            width=800,
-            height=500
+        loop = asyncio.get_running_loop()
+        df_values = await loop.run_in_executor(
+            self._executor,
+            compute_runoff_df,
+            self.date_range,
+            self.agg_method
         )
-        values = merged[var_name].values
-        vmin, vmax = np.percentile(values, [2, 98])
-        opts['clim'] = (vmin, vmax)
-        polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
-        self._cache_map_diff[key] = polys
-        return polys
+        if df_values is None or df_values.empty:
+            result = pn.pane.Markdown(f"Keine SHAP-Daten für Runoff-Differenz darstellbar.", width=300)
+        else:
+            merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
+            opts = dict(
+                projection=ccrs.Mercator(),
+                tools=['hover'],
+                color=var_name,
+                cmap='YlGn',
+                colorbar=True,
+                line_color='black',
+                line_width=0.1,
+                width=800,
+                height=500
+            )
+            values = merged[var_name].values
+            vmin, vmax = np.percentile(values, [2, 98])
+            opts['clim'] = (vmin, vmax)
+            result = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
+        self._cache_map_diff[key] = result
+        return result
 
     @pn.depends('variable', 'start_date', 'end_date', 'agg_method', watch=False)
-    def get_map(self):
-        """Aggregierte Karte für die gewählte Variable (mit Cache)."""
+    async def get_map(self):
+        """Async aggregierte Karte für die gewählte Variable."""
         var_name = self.variable
         if var_name is None:
             return hv.Curve([]).opts(width=800, height=500)
-        # Cache-Key basierend auf Auswahl
         key = (var_name, self.start_date, self.end_date, self.agg_method)
         if key in self._cache_map:
-            polys = self._cache_map[key]
+            return self._cache_map[key]
+        loop = asyncio.get_running_loop()
+        df_values = await loop.run_in_executor(
+            self._executor,
+            compute_map_df,
+            var_name,
+            self.date_range,
+            self.agg_method
+        )
+        if df_values is None or df_values.empty:
+            result = hv.Curve([]).opts(width=800, height=500)
         else:
-            agg_da = self.aggregate_data(var_name, self.date_range, self.ds)
-            df_values = agg_da.to_series().to_frame(name=var_name)
             merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
             opts = dict(
                 projection=ccrs.Mercator(),
@@ -286,15 +299,10 @@ class MainView(param.Parameterized):
             )
             if self.global_max > 0:
                 opts['clim'] = (0, self.global_max)
-            polys = gv.Polygons(
-                merged,
-                crs=ccrs.PlateCarree(),
-                vdims=[var_name, 'hru']
-            ).opts(**opts)
-            self._cache_map[key] = polys
-        # Stream-Source aktualisieren
-        self.tap_stream.source = polys
-        return polys
+            result = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
+        self._cache_map[key] = result
+        self.tap_stream.source = result
+        return result
 
     @pn.depends('tap_stream.x', 'tap_stream.y', 'agg_method', watch=False)
     def get_table(self):
