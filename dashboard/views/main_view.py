@@ -81,6 +81,10 @@ class MainView(param.Parameterized):
         # Sensitivity-Modelle
         self.snn = StaticSensitivity()
         self.rnn = RNNSensitivity()
+        # Caches for map visualizations to avoid redundant recomputations
+        self._cache_map = {}
+        self._cache_map_shap = {}
+        self._cache_map_diff = {}
 
     @property
     def date_range(self):
@@ -187,16 +191,23 @@ class MainView(param.Parameterized):
         mapping = {'P': 'sum_P', 'T': 'sum_T'}
         return mapping.get(var_name)
     
-    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', 'agg_method', watch=False)
+    @pn.depends('variable', 'start_date', 'end_date', watch=False)
     def get_map_shap_ds(self):
-        """Zeigt SHAP-Werte für die aktuell gewählte Variable aus ds."""
+        """Zeigt SHAP-Werte für die aktuell gewählte Variable aus ds (mit Cache)."""
         var_name = self.variable
+        key = (var_name, self.start_date, self.end_date)
+        if key in self._cache_map_shap:
+            return self._cache_map_shap[key]
         shap_var = self._map_shap_var(var_name)
         if shap_var is None or shap_var not in self.shap_ds.data_vars:
-            return pn.pane.Markdown(f"Keine SHAP-Werte für Variable {var_name} vorhanden.", width=300)
+            pane = pn.pane.Markdown(f"Keine SHAP-Werte für Variable {var_name} vorhanden.", width=300)
+            self._cache_map_shap[key] = pane
+            return pane
         agg_da = self.aggregate_data(shap_var, self.date_range, self.shap_ds)
         if agg_da is None:
-            return pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
+            pane = pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
+            self._cache_map_shap[key] = pane
+            return pane
         df_values = agg_da.to_series().to_frame(name=var_name)
         merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
         opts = dict(
@@ -213,14 +224,21 @@ class MainView(param.Parameterized):
         vmax = max(abs(merged[var_name].max()), abs(merged[var_name].min()))
         opts['clim'] = (-vmax, vmax)
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
+        self._cache_map_shap[key] = polys
         return polys
 
-    @pn.depends('day_stride', 'start_date', 'end_date', 'agg_method', watch=False)
+    @pn.depends('start_date', 'end_date', watch=False)
     def get_map_run_off_diff(self):
+        """Absolute Differenz der Runoff-Modelle ('Y') mit Cache."""
+        key = (self.start_date, self.end_date)
+        if key in self._cache_map_diff:
+            return self._cache_map_diff[key]
         var_name = 'Y'
         agg_da = self.aggregate_data(var_name, self.date_range, self.shap_ds)
         if agg_da is None:
-            return pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
+            pane = pn.pane.Markdown(f"Keine SHAP-Daten für {var_name} darstellbar.", width=300)
+            self._cache_map_diff[key] = pane
+            return pane
         df_values = agg_da.to_series().to_frame(name=var_name)
         merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
         opts = dict(
@@ -235,43 +253,46 @@ class MainView(param.Parameterized):
             height=500
         )
         values = merged[var_name].values
-        vmin, vmax = np.percentile(values, [2, 98])  # oder [5, 95]
+        vmin, vmax = np.percentile(values, [2, 98])
         opts['clim'] = (vmin, vmax)
         polys = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
+        self._cache_map_diff[key] = polys
         return polys
 
-    @pn.depends('variable', 'day_stride', 'start_date', 'end_date', 'agg_method', watch=False)
-    async def get_map(self):
-        await asyncio.sleep(0.1)
+    @pn.depends('variable', 'start_date', 'end_date', 'agg_method', watch=False)
+    def get_map(self):
+        """Aggregierte Karte für die gewählte Variable (mit Cache)."""
         var_name = self.variable
         if var_name is None:
             return hv.Curve([]).opts(width=800, height=500)
-        # Immer den Zeitbereich nutzen:
-        time_value = self.date_range
-        agg_da = self.aggregate_data(var_name, time_value, self.ds)
-        df_values = agg_da.to_series().to_frame(name=var_name)
-        merged = self.gdf.join(df_values, on="hru", how="inner")
-        merged = merged.dropna(subset=[var_name])
-        opts_dict = dict(
-            projection=ccrs.Mercator(),
-            tools=['hover', 'tap'],
-            color=var_name,
-            cmap=self._get_cmap_for_var(var_name), # Eingabe von Farbskala
-            colorbar=True, # zeigt Farbskala neben der Karte
-            line_color='black',
-            line_width=0.1,
-            width=800,
-            height=500
-        )
-        if self.global_max > 0:
-            opts_dict['clim'] = (0, self.global_max)
-        polys = gv.Polygons(
-            merged,  # Daten welche übergeben werden, muss geometry enthalten
-            crs=ccrs.PlateCarree(), # einfache Projektion, bei der lat/lon direkt als X/Y interpretiert werden,
-            # das entspricht EPSG:4326 (Breitengrad/Längengrad). Sehr wichtig: Das ist nicht die Darstellung,
-            # sondern das Koordinatensystem der Daten!
-            vdims=[var_name, 'hru'] # Welche Variablen für Farbe, Hover, Klicks genutzt werden
-        ).opts(**opts_dict)
+        # Cache-Key basierend auf Auswahl
+        key = (var_name, self.start_date, self.end_date, self.agg_method)
+        if key in self._cache_map:
+            polys = self._cache_map[key]
+        else:
+            agg_da = self.aggregate_data(var_name, self.date_range, self.ds)
+            df_values = agg_da.to_series().to_frame(name=var_name)
+            merged = self.gdf.join(df_values, on="hru", how="inner").dropna(subset=[var_name])
+            opts = dict(
+                projection=ccrs.Mercator(),
+                tools=['hover', 'tap'],
+                color=var_name,
+                cmap=self._get_cmap_for_var(var_name),
+                colorbar=True,
+                line_color='black',
+                line_width=0.1,
+                width=800,
+                height=500
+            )
+            if self.global_max > 0:
+                opts['clim'] = (0, self.global_max)
+            polys = gv.Polygons(
+                merged,
+                crs=ccrs.PlateCarree(),
+                vdims=[var_name, 'hru']
+            ).opts(**opts)
+            self._cache_map[key] = polys
+        # Stream-Source aktualisieren
         self.tap_stream.source = polys
         return polys
 
