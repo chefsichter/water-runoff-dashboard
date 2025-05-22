@@ -156,21 +156,6 @@ class MainView(param.Parameterized):
             return self.var_cmaps[var_name]
         return self.var_cmaps.get('*default*', 'Viridis')
 
-    def aggregate_data(self, var_name, time_value, dataset):
-        da = dataset[var_name]
-        if 'time' in da.dims:
-            # Slice nach Zeitbereich (immer Tuple von zwei Daten)
-            start_date, end_date = map(pd.to_datetime, time_value)
-            sel_da = da.sel(time=slice(start_date, end_date))
-            # Dynamische Aggregation entsprechend ausgewählter Methode
-            try:
-                agg_da = getattr(sel_da, self.agg_method)(dim='time')
-            except Exception:
-                agg_da = sel_da.sum(dim='time')
-        else:
-            agg_da = da
-        return agg_da
-
     @pn.depends('variable', 'start_date', 'end_date', 'agg_method', watch=False)
     async def get_map_shap_ds(self):
         """Async SHAP-Karte für die aktuell gewählte Variable."""

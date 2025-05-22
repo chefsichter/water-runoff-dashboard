@@ -1,6 +1,8 @@
 import pandas as pd
 import panel as pn
 
+from dashboard.views.main_multiprocessing import aggregate_data
+
 def create_aggregation_widget(main_view, hru_clicked):
     """
     Erstellt die Aggregationsansicht: Tabelle mit Basiswerten für die angeklickte HRU.
@@ -17,7 +19,7 @@ def create_aggregation_widget(main_view, hru_clicked):
     for dyn in ['P', 'T', 'Qmm_mod', 'Qmm_prevah']:
         if dyn in main_view.time_vars:
             try:
-                dyn_da = main_view.aggregate_data(dyn, time_value, main_view.ds)
+                dyn_da = aggregate_data(main_view.ds, dyn, time_value, main_view.agg_method)
                 row_data[dyn] = float(dyn_da.sel(hru=hru_clicked).values)
             except Exception:
                 row_data[dyn] = None
@@ -25,7 +27,7 @@ def create_aggregation_widget(main_view, hru_clicked):
     # Aktuelle Variable (evtl. dynamisch oder statisch)
     if var_name in main_view.time_vars and var_name not in dynamic_keys:
         try:
-            var_da = main_view.aggregate_data(var_name, time_value, main_view.ds)
+            var_da = aggregate_data(main_view.ds, var_name, time_value, main_view.agg_method)
             row_data[var_name] = float(var_da.sel(hru=hru_clicked).values)
         except Exception:
             row_data[var_name] = None
