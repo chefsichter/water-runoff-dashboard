@@ -32,18 +32,6 @@ def create_app():
     all_vars, time_vars, static_vars, var_metadata = get_variable_lists(ds)
     var_cmaps = get_var_colormaps()
 
-
-    # Modal-Styles überschreiben – GANZ am Anfang
-    pn.config.raw_css.append("""
-.modal-dialog {
-    max-width: 520px !important;  /* enger als vorher (600px) */
-    width: 90%;  /* mobile-friendly */
-    margin: 1.75rem auto;  /* optional: etwas Abstand nach oben/unten */
-}
-.modal-content {
-    padding: 0px;  /* Padding hier auf 0, weil du es im .var-info-modal selbst machst */
-}
-""")
     # Bootstrap-Template erzeugen
     bootstrap = pn.template.BootstrapTemplate(title="📊💧 Water Runoff Dashboard")
 
@@ -120,6 +108,8 @@ def create_app():
     # Füge die einzelnen Teile zusammen
     bootstrap.sidebar.append(sidebar)
     bootstrap.main.append(main_view.panel_view())
+    info_pane = pn.pane.HTML("", sizing_mode="stretch_width")
+    bootstrap.modal.append(info_pane)
 
     return bootstrap
 
