@@ -37,8 +37,6 @@ class MainView(param.Parameterized):
     playing = False
     # Spielgeschwindigkeit in Millisekunden (Standard: 300 ms)
     play_speed = param.Number(default=300, bounds=(50, 10000))
-    # Global max für den Farbbereich (wird nach Berechnung gesetzt)
-    global_max = param.Number(default=0)
 
     # Zeitbereich (für Slider)
     time_min = param.CalendarDate(default=None)
@@ -122,22 +120,6 @@ class MainView(param.Parameterized):
     def get_start_date(self):
         return self.date_range[0]
 
-    def compute_global_max(self):  # todo: remove
-        """
-        Berechnet über den gesamten Datensatz (für die aktuell ausgewählte Variable und day_stride)
-        den maximalen aggregierten Wert. Während der Berechnung wird ein Spinner angezeigt.
-        """
-        var_name = self.variable
-        if var_name is None or var_name not in self.ds:
-            self.global_max = 0
-            return
-        da = self.ds[var_name]
-        if 'time' in da.dims:
-            # Verwende xarray rolling, um das aggregierte Fenster zu berechnen:
-            aggregated = da.rolling(time=self.day_stride, min_periods=self.day_stride).sum()
-            self.global_max = float(aggregated.max())
-        else:
-            self.global_max = float(da.max())
 
     @pn.depends('play', watch=True)
     def toggle_play(self):
@@ -297,8 +279,6 @@ class MainView(param.Parameterized):
                 width=800,
                 height=500
             )
-            if self.global_max > 0:
-                opts['clim'] = (0, self.global_max)
             result = gv.Polygons(merged, crs=ccrs.PlateCarree(), vdims=[var_name, 'hru']).opts(**opts)
         self._cache_map[key] = result
         self.tap_stream.source = result
