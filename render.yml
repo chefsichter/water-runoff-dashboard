@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: water-runoff-dashboard
+    repo: https://gitlab.ethz.ch/fbraendli/AI4Good.git
+    branch: master
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: python render.py
