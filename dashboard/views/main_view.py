@@ -2,6 +2,7 @@ import asyncio
 import os
 from concurrent.futures import ProcessPoolExecutor
 import numpy as np
+import pyproj
 
 from dashboard.config.settings import MIN_DAY_STRIDE, MAX_DAY_STRIDE, INIT_SPEED_MS, INIT_AGG_METHOD
 from dashboard.views.main_multiprocessing import init_global_vars, compute_map_df, compute_runoff_df, compute_shap_df
@@ -9,7 +10,8 @@ from dashboard.widgets.table_aggregation_widget import create_aggregation_widget
 
 # Link Aggregationsfunktion an MainView
 # PROJ_LIB setzen – passe den Pfad ggf. an deine Umgebung an
-os.environ["PROJ_LIB"] = "/home/chefsichter/miniconda3/envs/ai4good/share/proj"
+if "PROJ_LIB" not in os.environ:
+    os.environ["PROJ_LIB"] = pyproj.datadir.get_data_dir()
 
 import param
 import panel as pn
@@ -20,9 +22,6 @@ import geoviews as gv
 from holoviews.streams import Tap
 import cartopy.crs as ccrs
 from shapely.geometry import Point
-
-from bokeh.io import curdoc
-from dashboard.sensitivity_models import StaticSensitivity, RNNSensitivity
 
 class MainView(param.Parameterized):
     # Alle Variablen sollen in der Combobox auswählbar sein.
