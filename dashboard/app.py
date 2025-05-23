@@ -1,3 +1,15 @@
+import os
+import pyproj
+
+# Umgebungsvariablen frühzeitig setzen
+if "PROJ_LIB" not in os.environ:
+    os.environ["PROJ_LIB"] = pyproj.datadir.get_data_dir()
+
+# Falls nötig:
+gdal_path = os.path.join(pyproj.datadir.get_data_dir(), "..", "gdal")
+if os.path.exists(gdal_path):
+    os.environ["GDAL_DATA"] = os.path.abspath(gdal_path)
+
 from pathlib import Path
 import panel as pn
 from functools import partial
@@ -15,7 +27,6 @@ from dashboard.views.sidebar_view import create_sidebar, create_sidebar_widgets
 from dashboard.widgets.year_range_slider import set_map_bounds
 from dashboard.css.custom_css import load_custom_css
 from dashboard.data.data_loader import load_data, get_time_bounds, get_variable_lists, get_var_colormaps
-
 
 def create_app():
     # Pfade anpassen:
