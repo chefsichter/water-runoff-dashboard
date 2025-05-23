@@ -78,9 +78,6 @@ class MainView(param.Parameterized):
         self.param.variable.objects = self.all_vars
         # Platzhalter für den DateRangeSlider
         self.date_range_slider = None
-        # Sensitivity-Modelle
-        self.snn = StaticSensitivity()
-        self.rnn = RNNSensitivity()
         # Caches for map visualizations to avoid redundant recomputations
         self._cache_map = {}
         self._cache_map_shap = {}
