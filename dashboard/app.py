@@ -33,7 +33,7 @@ def create_app():
     script_dir = Path(__file__).resolve().parent
     netcdf_path = script_dir.parent / "data" / "CHRUN" / "chrun.nc"
     shapefile_path = script_dir.parent / "data" / "CHRUN" / "catchments" / 'catchments.shp'
-    shap_ds_path = script_dir.parent / "Model" / "Training" / "shap_rnn.nc"
+    shap_ds_path = script_dir.parent / "data" / "model" / "shap_rnn.nc"
 
     # Custom CSS laden (falls vorhanden)
     load_custom_css()
